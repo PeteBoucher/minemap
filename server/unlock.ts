@@ -1,7 +1,7 @@
 // GET /api/unlock?session_id=cs_… → { license }
 // Stripe's Payment Link sends buyers back to the app with the Checkout Session id; this checks with
 // Stripe that the session was paid and returns a signed licence.
-import { type CheckoutSession, type Env, configured, isPaid, json, licenseFor, stripeGet } from "./_stripe";
+import { type CheckoutSession, type Env, configured, isPaid, json, licenseFor, stripeGet } from "./stripe";
 
 export async function handleUnlock(request: Request, env: Env, fetchFn: typeof fetch = fetch): Promise<Response> {
   if (!configured(env)) return json({ error: "Unlocking isn't set up on this server." }, 503);
@@ -12,5 +12,3 @@ export async function handleUnlock(request: Request, env: Env, fetchFn: typeof f
   if (!isPaid(session, env)) return json({ error: "That purchase hasn't been paid." }, 402);
   return json({ license: await licenseFor(session, env) });
 }
-
-export const onRequestGet = ({ request, env }: { request: Request; env: Env }) => handleUnlock(request, env);

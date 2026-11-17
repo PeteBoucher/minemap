@@ -1,6 +1,6 @@
 // Unlock licences: a small signed token, "<payload>.<signature>" in base64url. The server signs it
 // with a private key after Stripe confirms payment; the app checks it offline with the public key.
-// ECDSA P-256 / SHA-256 via WebCrypto, which browsers, Node and Cloudflare Workers all support.
+// ECDSA P-256 / SHA-256 via WebCrypto, which browsers, Node and Vercel's Edge runtime all support.
 
 export interface License {
   v: 1;

@@ -5,7 +5,7 @@
 import { generateLicenseKeys } from "../src/core/license";
 
 const { publicJwk, privateJwk } = await generateLicenseKeys();
-console.log("# App build (.env.local / Cloudflare Pages build variable):");
+console.log("# App build (.env.local, and a Vercel environment variable):");
 console.log(`VITE_LICENSE_PUBLIC_JWK='${JSON.stringify(publicJwk)}'`);
-console.log("\n# Server secret (.dev.vars / Cloudflare Pages secret) - keep private:");
+console.log("\n# Server secret (.env.local for `vercel dev`, and a sensitive Vercel environment variable) - keep private:");
 console.log(`LICENSE_PRIVATE_JWK='${JSON.stringify(privateJwk)}'`);

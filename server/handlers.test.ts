@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { generateLicenseKeys, verifyLicense } from "../../src/core/license";
-import type { CheckoutSession, Env } from "./_stripe";
+import { generateLicenseKeys, verifyLicense } from "../src/core/license";
+import type { CheckoutSession, Env } from "./stripe";
 import { handleRestore } from "./restore";
 import { handleUnlock } from "./unlock";
 

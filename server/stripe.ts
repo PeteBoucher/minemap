@@ -1,6 +1,5 @@
-// Shared helpers for the unlock functions (Cloudflare Pages Functions).
-// Files starting with "_" are not routes.
-import { type License, signLicense } from "../../src/core/license";
+// Stripe helpers for the unlock endpoints (api/unlock.ts, api/restore.ts).
+import { type License, signLicense } from "../src/core/license";
 
 export interface Env {
   /** Stripe secret key (sk_test_… or sk_live_…). */
@@ -37,3 +36,13 @@ export async function licenseFor(s: CheckoutSession, env: Env): Promise<string> 
 }
 
 export const configured = (env: Env) => !!env.STRIPE_SECRET_KEY && !!env.LICENSE_PRIVATE_JWK;
+
+/** Server configuration from environment variables (set them in the Vercel project, or .env.local for `vercel dev`). */
+export function envFromProcess(): Env {
+  const e = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
+  return {
+    STRIPE_SECRET_KEY: e.STRIPE_SECRET_KEY ?? "",
+    LICENSE_PRIVATE_JWK: e.LICENSE_PRIVATE_JWK ?? "",
+    STRIPE_PAYMENT_LINK_ID: e.STRIPE_PAYMENT_LINK_ID || undefined,
+  };
+}

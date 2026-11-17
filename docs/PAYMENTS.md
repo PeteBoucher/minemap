@@ -1,33 +1,56 @@
 # Setting up the $5 unlock
 
-Minemap has no accounts. A Stripe Payment Link takes the payment. A small Cloudflare Pages Function checks the payment with Stripe and returns a signed licence. The app stores the licence and checks it offline with a public key.
+Minemap has no accounts. A Stripe Payment Link takes the payment. Two small Vercel functions check the payment with Stripe and return a signed licence. The app stores the licence and checks it offline with a public key.
 
 ```text
 Unlock button ──▶ Stripe Payment Link ──▶ back to /?session_id=cs_…
                                                 │
-app ── GET /api/unlock?session_id ──▶ function ── asks Stripe "paid?" ──▶ signs licence
-app ◀────────────── { license } ─────────┘
+app ── GET /api/unlock?session_id ──▶ api/unlock.ts ── asks Stripe "paid?" ──▶ signs licence
+app ◀────────────── { license } ─────────────┘
 ```
 
 Restoring on a new device works the same way: `POST /api/restore { email }` looks up a paid session for that email and signs a new licence.
+
+- **Endpoints:** `api/unlock.ts` and `api/restore.ts`, on Vercel's Edge runtime.
+- **Logic:** in `server/`, and tested without Stripe (`npm test`).
+
+## Accounts you need
+
+Both accounts are free to open.
+
+- **Stripe.** Test mode works straight away. Before taking real payments, Stripe asks for identity and bank details to activate the account.
+  - **Tax:** Stripe doesn't handle VAT for you. Selling digital products to EU consumers means charging VAT at the buyer's country's rate, usually by registering for the EU One-Stop Shop (OSS). Stripe Tax can calculate it, for an extra fee. Check with a tax adviser before going live.
+- **Vercel.** The Hobby plan is free but limited to non-commercial use, so move to Pro (currently $20/month) before charging money.
 
 ## One-time setup
 
 1. **Keys.** Run `npx tsx scripts/gen-license-keys.ts`.
    - Keep `LICENSE_PRIVATE_JWK` secret.
    - `VITE_LICENSE_PUBLIC_JWK` is public: it's built into the app.
-2. **Stripe** (use test mode first):
+2. **Vercel.** Import the GitHub repo as a new project. Vercel detects Vite, so the defaults are right: build command `npm run build`, output directory `dist`. The `api/` folder becomes the endpoints automatically.
+3. **Stripe** (in test mode first):
    1. Create a product called "Minemap unlock", priced at $5 as a one-time payment.
-   2. Create a **Payment Link** for it. Under *After payment*, choose *Don't show confirmation page* and redirect to `https://<your-domain>/?session_id={CHECKOUT_SESSION_ID}`.
-   3. Note the link URL (`https://buy.stripe.com/…`), its id (`plink_…`) and your secret key (`sk_test_…`).
-3. **Cloudflare Pages**: connect the GitHub repo. Use build command `npm run build` and output directory `dist`. The `functions/` folder is deployed automatically.
-   - Build variables: `VITE_LICENSE_PUBLIC_JWK` and `VITE_STRIPE_PAYMENT_LINK`.
-   - Secrets: `STRIPE_SECRET_KEY`, `LICENSE_PRIVATE_JWK` and `STRIPE_PAYMENT_LINK_ID`.
-4. **Test.** Buy with Stripe's test card `4242 4242 4242 4242` and check:
+   2. Create a **Payment Link** for it. Under *After payment*, choose *Don't show confirmation page* and redirect to `https://<your-vercel-domain>/?session_id={CHECKOUT_SESSION_ID}`.
+   3. Note the link URL (`https://buy.stripe.com/test_…`), its id (`plink_…`) and the test secret key (`sk_test_…`, under *Developers → API keys*).
+4. **Vercel environment variables** (*Project → Settings → Environment Variables*):
+
+   | Name | Value | Notes |
+   |---|---|---|
+   | `VITE_LICENSE_PUBLIC_JWK` | from step 1 | public, used at build time |
+   | `VITE_STRIPE_PAYMENT_LINK` | the Payment Link URL | public, used at build time |
+   | `STRIPE_SECRET_KEY` | `sk_test_…` | mark as sensitive |
+   | `LICENSE_PRIVATE_JWK` | from step 1 | mark as sensitive |
+   | `STRIPE_PAYMENT_LINK_ID` | `plink_…` | optional: only this link unlocks |
+
+   Redeploy after setting them. The `VITE_` values are built into the app.
+5. **Test.** Buy with Stripe's test card `4242 4242 4242 4242` (any future date, any CVC) and check:
    - the limits lift;
    - after clearing site data, *Already paid on another device?* with the same email unlocks again.
+6. **Going live.** Activate the Stripe account. Make a live-mode product and Payment Link, then swap in the live link, its `plink_…` id and the `sk_live_…` key.
 
 Until these are set, the unlock button is disabled and says unlocking isn't set up. The free limits still apply.
+
+**Local testing:** `npm run dev` serves the app without the endpoints. To run both, install the Vercel CLI and run `vercel dev` with the values in `.env.local` (see `.env.example`).
 
 ## Free version limits
 

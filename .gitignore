@@ -26,4 +26,3 @@ dist-ssr
 # local config and secrets
 .env.local
 .env.*.local
-.dev.vars

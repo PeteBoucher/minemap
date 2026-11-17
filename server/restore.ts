@@ -3,7 +3,7 @@
 //
 // Known trade-off: anyone who knows a buyer's email can unlock with it. For a $5 one-time unlock that
 // is accepted for now; the stronger option is to email a restore link instead (needs an email service).
-import { type CheckoutSession, type Env, configured, isPaid, json, licenseFor, stripeGet } from "./_stripe";
+import { type CheckoutSession, type Env, configured, isPaid, json, licenseFor, stripeGet } from "./stripe";
 
 export async function handleRestore(request: Request, env: Env, fetchFn: typeof fetch = fetch): Promise<Response> {
   if (!configured(env)) return json({ error: "Unlocking isn't set up on this server." }, 503);
@@ -17,5 +17,3 @@ export async function handleRestore(request: Request, env: Env, fetchFn: typeof 
   if (!paid) return json({ error: "No purchase found for that email." }, 404);
   return json({ license: await licenseFor(paid, env) });
 }
-
-export const onRequestPost = ({ request, env }: { request: Request; env: Env }) => handleRestore(request, env);

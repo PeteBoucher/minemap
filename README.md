@@ -4,6 +4,7 @@ A map companion for Minecraft that runs in the browser and installs as an app (a
 
 - Plan: [docs/PLAN.md](docs/PLAN.md)
 - Original single-file prototype: [docs/prototype.html](docs/prototype.html)
+- Payments and deployment (Stripe + Vercel): [docs/PAYMENTS.md](docs/PAYMENTS.md)
 
 ```sh
 npm install

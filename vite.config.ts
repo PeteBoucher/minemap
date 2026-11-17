@@ -21,6 +21,6 @@ export default defineConfig({
     }),
   ],
   test: {
-    include: ["src/**/*.test.ts", "functions/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "server/**/*.test.ts"],
   },
 });

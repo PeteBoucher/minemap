@@ -48,8 +48,9 @@ minemap/
       placeForm.ts          add/edit a place (replaces "Copy as code": edits now persist)
       paywall.ts            free limits, unlock flow, licence check
     styles.css              the prototype's CSS tokens and layout, moved as is
-  functions/api/
-    unlock.ts               Cloudflare Pages Function: check the Stripe session, return a signed licence
+  api/
+    unlock.ts, restore.ts   Vercel endpoints (Edge runtime): check the Stripe session, return a signed licence
+  server/                   the endpoints' logic, tested without Stripe
   public/                   icons, manifest assets
   public/demo/              the demo world's screenshots (also the test fixtures for import), known {x, z, size} in store/demoWorld.ts
 ```
@@ -85,10 +86,10 @@ All of these are in `~/Documents/MinecraftMap/minecraft-map-editable.html`:
 ## Payments: Stripe unlock with no accounts
 - **Free tier:** 1 world, 30 places and 5 map screenshots. All route and travel features are free.
 - **Unlock ($5 one-time):** unlimited worlds and screenshots, plus world export/import.
-- **Checkout:** a Stripe Payment Link sends the buyer to `/unlocked?session_id=…`. `functions/api/unlock.ts` checks the session with Stripe's API and returns an Ed25519-signed licence `{email, sessionId, issuedAt}`.
+- **Checkout:** a Stripe Payment Link sends the buyer to `/unlocked?session_id=…`. `api/unlock.ts` checks the session with Stripe's API and returns an ECDSA P-256 signed licence `{email, sid, iat}`.
 - **Verification:** the app checks the licence offline using a public key built into it, and stores it in IndexedDB.
 - **Restore purchase:** enter your email, the function looks up the Stripe customer and re-issues the licence.
-- **Secrets:** the Stripe key and signing key are Cloudflare environment variables and are never in the repo.
+- **Secrets:** the Stripe key and signing key are Vercel environment variables and are never in the repo. Setup steps: [PAYMENTS.md](PAYMENTS.md).
 
 ## Build order (about 2 weeks)
 1. **Scaffold.** Run `npm create vite` (vanilla-ts), then add Vitest, `vite-plugin-pwa` (manifest, offline caching, `share_target` for Android) and `idb-keyval`. Run `git init` and add `.gitignore`.
@@ -98,7 +99,7 @@ All of these are in `~/Documents/MinecraftMap/minecraft-map-editable.html`:
 5. **Screenshot import.** Build crop, OCR and placement, a preview showing the map ghosted in its computed position, and confirm/nudge controls. Run terrain extraction in a worker.
 6. **Paywall and unlock function.** Use Stripe test mode end to end.
 7. **Launch polish.** Landing section, icons, PostHog analytics (events: world_created, screenshot_imported, auto_place_success/fail, paywall_shown, unlocked), privacy note, and the name "Minemap — a map companion for Minecraft". Mojang's guidelines don't allow "Minecraft" in the product name.
-8. **Deploy** to Cloudflare Pages, then post to r/Minecraft, r/NintendoSwitch and the Bedrock communities.
+8. **Deploy** to Vercel, then post to r/Minecraft, r/NintendoSwitch and the Bedrock communities.
 
 ## Verification
 - **Unit tests:** `npm test`. Vitest covers `core/` and `import/`. Automatic placement should be exact on at least 20 of the 22 fixture screenshots. OCR should read every fixture that shows coordinates.
