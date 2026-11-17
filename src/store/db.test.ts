@@ -7,10 +7,10 @@ import {
   listWorlds, newId, saveMap, savePlace, setCurrentWorldId,
 } from "./db";
 import { DEMO_MAPS, DEMO_PLACES } from "./demoWorld";
-import { SCHEMA_VERSION, exportWorld, importWorld, loadDemoWorld, migrate } from "./migrate";
+import { DEMO_ID, buildDemo } from "./demo";
+import { SCHEMA_VERSION, exportWorld, importWorld, migrate } from "./migrate";
 
 const jpeg = (n = 3) => new Blob([new Uint8Array(n).fill(7)], { type: "image/jpeg" });
-const demoFile = (url: string) => readFile(new URL(`../../public/${url.replace(/^\//, "")}`, import.meta.url)).then((b) => new Blob([b], { type: "image/jpeg" }));
 
 beforeEach(() => clear());
 
@@ -75,22 +75,28 @@ describe("migrate", () => {
 });
 
 describe("demo world", () => {
-  it("loads every prototype place and map screenshot", async () => {
-    const w = await loadDemoWorld("/", demoFile);
-    expect(w.name).toBe("Demo world");
-    const places = await listPlaces(w.id), maps = await listMaps(w.id);
-    expect(places).toHaveLength(DEMO_PLACES.length);
-    expect(places.find((p) => p.name === "Hobbiton")).toMatchObject({ x: 107, z: 836, kind: "village", biome: "plains" });
-    expect(maps).toHaveLength(DEMO_MAPS.length);
-    expect(maps.find((m) => m.crop)?.crop).toEqual({ x: 49, y: 60, size: 542 });
-    const img = await getImage(maps[0].imageId);
-    expect(img!.size).toBeGreaterThan(50_000);
+  it("is built in memory from the prototype's places and maps", () => {
+    const d = buildDemo("/");
+    expect(d.world).toMatchObject({ id: DEMO_ID, name: "Demo world" });
+    expect(d.places).toHaveLength(DEMO_PLACES.length);
+    expect(d.places.find((p) => p.name === "Hobbiton")).toMatchObject({ x: 107, z: 836, kind: "village", biome: "plains" });
+    expect(d.maps).toHaveLength(DEMO_MAPS.length);
+    expect(d.maps.find((m) => m.crop)?.crop).toEqual({ x: 49, y: 60, size: 542 });
+    expect(d.imageUrls.get(d.maps[0].imageId)).toBe(`/demo/${DEMO_MAPS[0].file}`);
   });
 
-  it("skips screenshots that fail to load", async () => {
-    const w = await loadDemoWorld("/", async () => { throw new Error("offline"); });
-    expect(await listPlaces(w.id)).toHaveLength(DEMO_PLACES.length);
-    expect(await listMaps(w.id)).toEqual([]);
+  it("every demo screenshot exists", async () => {
+    for (const m of DEMO_MAPS) {
+      const b = await readFile(new URL(`../../public/demo/${m.file}`, import.meta.url));
+      expect(b.length).toBeGreaterThan(50_000);
+    }
+  });
+
+  it("is never written to storage and starts fresh each time", async () => {
+    const a = buildDemo("/");
+    a.places[0].name = "changed";
+    expect(buildDemo("/").places[0].name).toBe(DEMO_PLACES[0].name);
+    expect(await listWorlds()).toEqual([]);
   });
 });
 

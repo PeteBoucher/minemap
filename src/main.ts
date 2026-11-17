@@ -6,7 +6,8 @@ import {
   createWorld, deletePlace, deleteWorld, getCurrentWorldId, getImage, getWorld, listMaps, listPlaces, listWorlds,
   newId, requestPersistence, savePlace, saveWorld, setCurrentWorldId,
 } from "./store/db";
-import { exportWorld, importWorld, loadDemoWorld, migrate } from "./store/migrate";
+import { DEMO_ID, buildDemo } from "./store/demo";
+import { exportWorld, importWorld, migrate } from "./store/migrate";
 import { MapView } from "./ui/map";
 import { renderBiomeLegend, renderList, renderRoute } from "./ui/panels";
 import { terrainFor } from "./ui/terrain";
@@ -17,7 +18,9 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 let world: World | null = null;
 let places: Place[] = [];
 let maps: MapShot[] = [];
-const urls = new Map<string, string>(); // imageId -> object URL
+const urls = new Map<string, string>(); // imageId -> object URL (or a plain URL in the demo)
+/** The demo world lives only in memory: edits work but are never saved. */
+const isDemo = () => world?.id === DEMO_ID;
 let selA: string | undefined, selB: string | undefined;
 let terrainAt: TravelCtx["terrainAt"];
 let terrainLoading = false;
@@ -70,15 +73,16 @@ function pick(id: string): void {
 /* ---------- worlds ---------- */
 async function refreshWorldSelect(): Promise<World[]> {
   const worlds = await listWorlds(), sel = $("worldSel") as HTMLSelectElement;
-  sel.replaceChildren(...worlds.map((w) => new Option(w.name, w.id)));
+  sel.replaceChildren(...worlds.map((w) => new Option(w.name, w.id)), new Option("Demo world (not saved)", DEMO_ID));
   if (world) sel.value = world.id;
   return worlds;
 }
 
-async function openWorld(id: string | undefined, select?: [string, string]): Promise<void> {
-  for (const u of urls.values()) URL.revokeObjectURL(u);
+async function openWorld(id: string | undefined): Promise<void> {
+  for (const u of urls.values()) if (u.startsWith("blob:")) URL.revokeObjectURL(u);
   urls.clear();
-  world = id ? (await getWorld(id)) ?? null : null;
+  const demo = id === DEMO_ID ? buildDemo() : null;
+  world = demo ? demo.world : id ? (await getWorld(id)) ?? null : null;
   const worlds = await refreshWorldSelect();
   if (!world && worlds.length) world = worlds[0];
   $("welcome").hidden = !!world;
@@ -86,13 +90,21 @@ async function openWorld(id: string | undefined, select?: [string, string]): Pro
   if (!world) return;
   await setCurrentWorldId(world.id);
   ($("worldSel") as HTMLSelectElement).value = world.id;
-  [places, maps] = await Promise.all([listPlaces(world.id), listMaps(world.id)]);
-  for (const m of maps) {
-    const img = await getImage(m.imageId);
-    if (img) urls.set(m.imageId, URL.createObjectURL(img));
+  $("demoNote").hidden = !demo;
+  document.querySelectorAll<HTMLElement>("#worldMenu .saved-only").forEach((e) => (e.hidden = !!demo));
+  if (demo) {
+    ({ places, maps } = demo);
+    demo.imageUrls.forEach((u, k) => urls.set(k, u));
+  } else {
+    [places, maps] = await Promise.all([listPlaces(world.id), listMaps(world.id)]);
+    for (const m of maps) {
+      const img = await getImage(m.imageId);
+      if (img) urls.set(m.imageId, URL.createObjectURL(img));
+    }
   }
-  selA = select ? places.find((p) => p.name === select[0])?.id : undefined;
-  selB = select ? places.find((p) => p.name === select[1])?.id : undefined;
+  const named = (n: string) => (demo ? places.find((p) => p.name === n)?.id : undefined);
+  selA = named("Hobbiton");
+  selB = named("World spawn point");
   cancelEdit();
   terrainAt = undefined;
   reachCache = null;
@@ -106,7 +118,9 @@ async function loadTerrain(): Promise<void> {
   const forWorld = world?.id;
   terrainLoading = true;
   render();
-  const lookup = await terrainFor(maps);
+  const lookup = await terrainFor(maps, isDemo()
+    ? async (id) => { const u = urls.get(id); return u ? fetch(u).then((r) => (r.ok ? r.blob() : undefined)).catch(() => undefined) : undefined; }
+    : getImage);
   if (world?.id !== forWorld) return;
   terrainAt = lookup;
   terrainLoading = false;
@@ -117,7 +131,7 @@ async function loadTerrain(): Promise<void> {
 async function updateSettings(patch: Partial<World["settings"]>): Promise<void> {
   if (!world) return;
   world = { ...world, settings: { ...world.settings, ...patch } };
-  await saveWorld(world);
+  if (!isDemo()) await saveWorld(world);
   render();
 }
 const setPace = (pace: Pace) => updateSettings({ pace });
@@ -130,23 +144,14 @@ async function startNewWorld(): Promise<void> {
   await openWorld(w.id);
 }
 
-async function startDemo(): Promise<void> {
-  const btns = document.querySelectorAll<HTMLButtonElement>("#startDemo, [data-act=demo]");
-  btns.forEach((b) => (b.disabled = true));
-  try {
-    const w = await loadDemoWorld();
-    await openWorld(w.id, ["Hobbiton", "World spawn point"]);
-  } finally {
-    btns.forEach((b) => (b.disabled = false));
-  }
-}
+const startDemo = () => openWorld(DEMO_ID);
 
 async function worldAction(act: string): Promise<void> {
   ($("worldMenu") as HTMLDetailsElement).open = false;
   if (act === "new") return startNewWorld();
   if (act === "demo") return startDemo();
   if (act === "import") return $("importFile").click();
-  if (!world) return;
+  if (!world || isDemo()) return;
   if (act === "rename") {
     const name = prompt("Rename world", world.name)?.trim();
     if (!name) return;
@@ -209,9 +214,13 @@ form.addEventListener("submit", async (e) => {
   const kind = (form.querySelector<HTMLInputElement>("input[name=kind]:checked")?.value ?? "place") as PlaceKind;
   const p: Place = { ...(editing ?? {}), id: editing?.id ?? newId(), worldId: world.id, name, x, z, kind };
   if (f.biome.value) p.biome = f.biome.value; else delete p.biome;
-  await savePlace(p);
-  if (!places.length) void requestPersistence();
-  places = await listPlaces(world.id);
+  if (isDemo()) {
+    places = editing ? places.map((q) => (q.id === p.id ? p : q)) : [...places, p];
+  } else {
+    await savePlace(p);
+    if (!places.length) void requestPersistence();
+    places = await listPlaces(world.id);
+  }
   cancelEdit();
   render();
 });
@@ -219,7 +228,7 @@ $("formCancel").onclick = cancelEdit;
 
 async function removePlace(p: Place): Promise<void> {
   if (!world || !confirm(`Delete “${p.name}”?`)) return;
-  await deletePlace(world.id, p.id);
+  if (!isDemo()) await deletePlace(world.id, p.id);
   places = places.filter((q) => q.id !== p.id);
   if (selA === p.id) [selA, selB] = [selB, undefined];
   if (selB === p.id) selB = undefined;

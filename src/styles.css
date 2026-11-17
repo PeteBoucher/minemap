@@ -99,3 +99,4 @@ input,select{font:inherit;font-size:.9rem;padding:6px 8px;border:1px solid var(-
 .legend label{cursor:pointer}
 .note{font-size:.82rem;color:var(--muted);margin-top:10px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.demo-note{display:inline-block;margin:-10px 0 16px;padding:4px 10px;border:1px dashed var(--accent2);border-radius:4px;color:var(--accent2);font-size:.88rem}

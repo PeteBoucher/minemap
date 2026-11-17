@@ -1,10 +1,9 @@
-// Storage schema versioning, the demo world, and whole-world export/import.
+// Storage schema versioning and whole-world export/import.
 import { get, set } from "idb-keyval";
 import {
   type MapShot, type Place, type World, DEFAULT_SETTINGS,
-  createWorld, getImage, listMaps, listPlaces, newId, saveMap, savePlaces, saveWorld,
+  getImage, listMaps, listPlaces, newId, saveMap, savePlaces, saveWorld,
 } from "./db";
-import { DEMO_MAPS, DEMO_PLACES } from "./demoWorld";
 
 export const SCHEMA_VERSION = 1;
 
@@ -15,28 +14,6 @@ export async function migrate(): Promise<number> {
   // future steps go here: if (from < 2) { ... }
   if (from !== SCHEMA_VERSION) await set("schema", SCHEMA_VERSION);
   return from;
-}
-
-export type FetchBlob = (url: string) => Promise<Blob>;
-const fetchBlob: FetchBlob = async (url) => {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`Couldn't load ${url} (${r.status})`);
-  return r.blob();
-};
-
-/**
- * Create the demo world: the original prototype's places and map screenshots.
- * Screenshots are fetched from `${base}demo/<file>`; a screenshot that fails to load is skipped.
- */
-export async function loadDemoWorld(base = import.meta.env?.BASE_URL ?? "/", fetchImage: FetchBlob = fetchBlob): Promise<World> {
-  const world = await createWorld("Demo world");
-  await savePlaces(world.id, DEMO_PLACES.map((p) => ({ id: newId(), worldId: world.id, ...p })));
-  await Promise.all(DEMO_MAPS.map(async ({ file, ...m }) => {
-    let blob: Blob;
-    try { blob = await fetchImage(`${base}demo/${file}`); } catch { return; }
-    await saveMap({ id: newId(), worldId: world.id, imageId: newId(), ...m }, blob);
-  }));
-  return world;
 }
 
 /* ---------- export / import ---------- */

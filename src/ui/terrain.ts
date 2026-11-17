@@ -2,7 +2,7 @@
 // Results are cached per screenshot and placement, so moving one map only re-reads that one.
 import { mergeTerrain } from "../core/terrain";
 import type { TerrainCell } from "../core/travel";
-import { type MapShot, getImage } from "../store/db";
+import type { MapShot } from "../store/db";
 import type { TerrainRequest, TerrainResponse } from "./terrain.worker";
 
 type Cells = TerrainResponse["cells"];
@@ -25,7 +25,9 @@ function getWorker(): Worker {
 
 const key = (m: MapShot) => `${m.imageId}|${m.x}|${m.z}|${m.size}|${m.crop ? `${m.crop.x},${m.crop.y},${m.crop.size}` : ""}`;
 
-async function cellsFor(m: MapShot): Promise<Cells> {
+export type GetImage = (imageId: string) => Promise<Blob | undefined>;
+
+async function cellsFor(m: MapShot, getImage: GetImage): Promise<Cells> {
   const k = key(m);
   const hit = cache.get(k);
   if (hit) return hit;
@@ -41,7 +43,7 @@ async function cellsFor(m: MapShot): Promise<Cells> {
 }
 
 /** Terrain lookup for these maps (smaller, more detailed maps win where they overlap). */
-export async function terrainFor(maps: MapShot[]): Promise<(x: number, z: number) => TerrainCell | undefined> {
-  const results = await Promise.all(maps.map(cellsFor));
+export async function terrainFor(maps: MapShot[], getImage: GetImage): Promise<(x: number, z: number) => TerrainCell | undefined> {
+  const results = await Promise.all(maps.map((m) => cellsFor(m, getImage)));
   return mergeTerrain(maps, results);
 }

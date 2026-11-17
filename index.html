@@ -16,6 +16,7 @@
         <div>
           <h1>Minemap</h1>
           <p class="sub">Tap two places to get distance and which way to face. Scroll or pinch to zoom, drag to move. North is up (−Z).</p>
+          <p class="demo-note" id="demoNote" hidden>You're exploring the demo world. Try anything, but changes aren't saved.</p>
         </div>
         <div class="worldbar" id="worldbar" hidden>
           <label class="sr" for="worldSel">World</label>
@@ -24,13 +25,13 @@
             <summary aria-label="World options">•••</summary>
             <div class="items">
               <button type="button" data-act="new">New world…</button>
-              <button type="button" data-act="rename">Rename this world…</button>
-              <button type="button" data-act="demo">Load the demo world</button>
+              <button type="button" data-act="rename" class="saved-only">Rename this world…</button>
+              <button type="button" data-act="demo">Open the demo world</button>
               <hr />
-              <button type="button" data-act="export">Export backup</button>
+              <button type="button" data-act="export" class="saved-only">Export backup</button>
               <button type="button" data-act="import">Import backup…</button>
-              <hr />
-              <button type="button" data-act="delete" class="danger">Delete this world…</button>
+              <hr class="saved-only" />
+              <button type="button" data-act="delete" class="danger saved-only">Delete this world…</button>
             </div>
           </details>
           <input type="file" id="importFile" accept="application/json,.json" hidden />
