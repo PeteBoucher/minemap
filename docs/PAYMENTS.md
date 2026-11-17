@@ -18,8 +18,9 @@ Restoring on a new device works the same way: `POST /api/restore { email }` look
 
 Both accounts are free to open.
 
-- **Stripe.** Test mode works straight away. Before taking real payments, Stripe asks for identity and bank details to activate the account.
-  - **Tax:** Stripe doesn't handle VAT for you. Selling digital products to EU consumers means charging VAT at the buyer's country's rate, usually by registering for the EU One-Stop Shop (OSS). Stripe Tax can calculate it, for an extra fee. Check with a tax adviser before going live.
+- **Stripe, with Managed Payments.** Test mode works straight away. Before taking real payments, Stripe asks for identity and bank details to activate the account.
+  - **Managed Payments makes Stripe the merchant of record** (available on this account). Stripe is then liable for VAT and sales tax worldwide and handles fraud, disputes and buyer support, for an extra 3.5% per sale. On a $5 sale that's roughly $0.50–0.65 in total fees, more for international cards.
+  - **Without it**, you would have to charge and file EU VAT yourself (One-Stop Shop registration), so keep it on.
 - **Vercel.** The Hobby plan is free but limited to non-commercial use, so move to Pro (currently $20/month) before charging money.
 
 ## One-time setup
@@ -33,9 +34,12 @@ Both accounts are free to open.
    2. Vercel then shows the DNS records it wants, usually an `A` record for `minemap.me` and a `CNAME` for `www`. Use the exact values it shows: they can be project-specific.
    3. In Route53, open *Hosted zones → minemap.me* and create those two records. Vercel issues the HTTPS certificate once it sees them, usually within minutes.
 4. **Stripe** (in test mode first):
-   1. Create a product called "Minemap unlock", priced at $5 as a one-time payment.
-   2. Create a **Payment Link** for it. Under *After payment*, choose *Don't show confirmation page* and redirect to `https://minemap.me/?session_id={CHECKOUT_SESSION_ID}`.
-   3. Note the link URL (`https://buy.stripe.com/test_…`), its id (`plink_…`) and the test secret key (`sk_test_…`, under *Developers → API keys*).
+   1. Turn on **Managed Payments**.
+   2. Create a product called "Minemap unlock", priced at $5 as a one-time payment. Give it a **tax code labelled "Eligible for Managed Payments"**. A software or SaaS code for personal use fits a web app unlock; pick from the eligible list in the Dashboard.
+   3. Create a **Payment Link** for it, with Managed Payments enabled (Payment Links support it since April 2026). Under *After payment*, choose *Don't show confirmation page* and redirect to `https://minemap.me/?session_id={CHECKOUT_SESSION_ID}`.
+      - Buyers are asked for a name and billing address, which Stripe needs to work out the tax.
+      - Don't turn on Stripe Tax's automatic tax or shipping for this link: Managed Payments handles tax itself.
+   4. Note the link URL (`https://buy.stripe.com/test_…`), its id (`plink_…`) and the test secret key (`sk_test_…`, under *Developers → API keys*).
 5. **Vercel environment variables** (*Project → Settings → Environment Variables*):
 
    | Name | Value | Notes |
