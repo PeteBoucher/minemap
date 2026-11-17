@@ -28,11 +28,15 @@ Both accounts are free to open.
    - Keep `LICENSE_PRIVATE_JWK` secret.
    - `VITE_LICENSE_PUBLIC_JWK` is public: it's built into the app.
 2. **Vercel.** Import the GitHub repo as a new project. Vercel detects Vite, so the defaults are right: build command `npm run build`, output directory `dist`. The `api/` folder becomes the endpoints automatically.
-3. **Stripe** (in test mode first):
+3. **Domain: `minemap.me`** (registered in Route53, DNS stays there):
+   1. In Vercel, open *Project → Settings → Domains* and add `minemap.me` and `www.minemap.me`. Make `www` redirect to the bare domain.
+   2. Vercel then shows the DNS records it wants, usually an `A` record for `minemap.me` and a `CNAME` for `www`. Use the exact values it shows: they can be project-specific.
+   3. In Route53, open *Hosted zones → minemap.me* and create those two records. Vercel issues the HTTPS certificate once it sees them, usually within minutes.
+4. **Stripe** (in test mode first):
    1. Create a product called "Minemap unlock", priced at $5 as a one-time payment.
-   2. Create a **Payment Link** for it. Under *After payment*, choose *Don't show confirmation page* and redirect to `https://<your-vercel-domain>/?session_id={CHECKOUT_SESSION_ID}`.
+   2. Create a **Payment Link** for it. Under *After payment*, choose *Don't show confirmation page* and redirect to `https://minemap.me/?session_id={CHECKOUT_SESSION_ID}`.
    3. Note the link URL (`https://buy.stripe.com/test_…`), its id (`plink_…`) and the test secret key (`sk_test_…`, under *Developers → API keys*).
-4. **Vercel environment variables** (*Project → Settings → Environment Variables*):
+5. **Vercel environment variables** (*Project → Settings → Environment Variables*):
 
    | Name | Value | Notes |
    |---|---|---|
@@ -43,10 +47,10 @@ Both accounts are free to open.
    | `STRIPE_PAYMENT_LINK_ID` | `plink_…` | optional: only this link unlocks |
 
    Redeploy after setting them. The `VITE_` values are built into the app.
-5. **Test.** Buy with Stripe's test card `4242 4242 4242 4242` (any future date, any CVC) and check:
+6. **Test.** Buy with Stripe's test card `4242 4242 4242 4242` (any future date, any CVC) and check:
    - the limits lift;
    - after clearing site data, *Already paid on another device?* with the same email unlocks again.
-6. **Going live.** Activate the Stripe account. Make a live-mode product and Payment Link, then swap in the live link, its `plink_…` id and the `sk_live_…` key.
+7. **Going live.** Activate the Stripe account. Make a live-mode product and Payment Link, then swap in the live link, its `plink_…` id and the `sk_live_…` key.
 
 Until these are set, the unlock button is disabled and says unlocking isn't set up. The free limits still apply.
 
