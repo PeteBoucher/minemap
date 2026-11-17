@@ -35,10 +35,10 @@ Both accounts are free to open.
    3. In Route53, open *Hosted zones → minemap.me* and create those two records. Vercel issues the HTTPS certificate once it sees them, usually within minutes.
 4. **Stripe** (in test mode first):
    1. Turn on **Managed Payments**.
-   2. Create a product called "Minemap unlock", priced at $5 as a one-time payment. Give it a **tax code labelled "Eligible for Managed Payments"**. A software or SaaS code for personal use fits a web app unlock; pick from the eligible list in the Dashboard.
+   2. Create a product called "Minemap unlock", priced at $5 as a one-time payment, with tax **included** in the price (*Include tax in price: Yes*, `tax_behavior: inclusive`). Buyers then pay exactly $5 everywhere, and VAT comes out of that. If tax isn't included, Stripe adds it on top (a Spanish buyer would pay $6.05). Give it a **tax code labelled "Eligible for Managed Payments"**. A software or SaaS code for personal use fits a web app unlock; pick from the eligible list in the Dashboard.
    3. Create a **Payment Link** for it, with Managed Payments enabled (Payment Links support it since April 2026). Under *After payment*, choose *Don't show confirmation page* and redirect to `https://minemap.me/?session_id={CHECKOUT_SESSION_ID}`.
       - Buyers are asked for a name and billing address, which Stripe needs to work out the tax.
-      - Don't turn on Stripe Tax's automatic tax or shipping for this link: Managed Payments handles tax itself.
+      - Don't add shipping. Managed Payments turns on automatic tax itself, with Stripe as the liable party, so the link shows it as on: that's expected.
    4. Note the link URL (`https://buy.stripe.com/test_…`), its id (`plink_…`) and the test secret key (`sk_test_…`, under *Developers → API keys*).
 5. **Vercel environment variables** (*Project → Settings → Environment Variables*):
 
