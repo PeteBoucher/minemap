@@ -10,10 +10,11 @@ export async function handleRestore(request: Request, env: Env, fetchFn: typeof 
   let email = "";
   try { email = String(((await request.json()) as { email?: unknown }).email ?? "").trim().toLowerCase(); } catch { /* bad body */ }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return json({ error: "Enter the email you used to pay." }, 400);
+  // Stripe rejects customer_details together with payment_link, so isPaid() checks the link instead.
   const q = new URLSearchParams({ "customer_details[email]": email, status: "complete", limit: "20" });
-  if (env.STRIPE_PAYMENT_LINK_ID) q.set("payment_link", env.STRIPE_PAYMENT_LINK_ID);
   const list = await stripeGet<{ data: CheckoutSession[] }>(env, `checkout/sessions?${q}`, fetchFn);
-  const paid = list?.data.find((s) => isPaid(s, env));
+  if (!list) return json({ error: "Couldn't check your purchase right now. Try again in a minute." }, 502);
+  const paid = list.data.find((s) => isPaid(s, env));
   if (!paid) return json({ error: "No purchase found for that email." }, 404);
   return json({ license: await licenseFor(paid, env) });
 }

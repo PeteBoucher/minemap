@@ -62,14 +62,24 @@ describe("POST /api/restore", () => {
     handleRestore(new Request("https://app.test/api/restore", { method: "POST", body: JSON.stringify(body) }), env, f);
 
   it("re-issues a licence for a paid purchase with that email", async () => {
-    const { fetchFn, calls } = fakeStripe({ "checkout/sessions?": { data: [session({ payment_status: "unpaid", id: "cs_test_unpaid000000" }), session()] } });
+    const { fetchFn, calls } = fakeStripe({ "checkout/sessions?": { data: [
+      session({ payment_status: "unpaid", id: "cs_test_unpaid000000" }),
+      session({ payment_link: "plink_other", id: "cs_test_otherlink000" }),
+      session(),
+    ] } });
     const r = await restore({ email: " Buyer@Example.com " }, fetchFn);
     expect(r.status).toBe(200);
     const { license } = (await r.json()) as { license: string };
     expect(await verifyLicense(license, publicJwk)).toMatchObject({ sid: "cs_test_abcdefghijkl" });
     const q = new URL(calls[0].url).searchParams;
     expect(q.get("customer_details[email]")).toBe("buyer@example.com");
-    expect(q.get("payment_link")).toBe("plink_ours");
+    // Stripe refuses customer_details combined with payment_link, so the link is checked here instead.
+    expect(q.has("payment_link")).toBe(false);
+  });
+
+  it("reports a Stripe error instead of saying there's no purchase", async () => {
+    const failing = (async () => new Response("{}", { status: 400 })) as unknown as typeof fetch;
+    expect((await restore({ email: "buyer@example.com" }, failing)).status).toBe(502);
   });
 
   it("finds nothing for an email without a purchase, and rejects bad input", async () => {
