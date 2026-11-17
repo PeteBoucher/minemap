@@ -1,7 +1,8 @@
 // Stripe helpers for the unlock endpoints (api/unlock.ts, api/restore.ts).
 import { type License, signLicense } from "../src/core/license";
+import type { AuditEnv } from "./audit";
 
-export interface Env {
+export interface Env extends AuditEnv {
   /** Stripe secret key (sk_test_… or sk_live_…). */
   STRIPE_SECRET_KEY: string;
   /** Private JWK (JSON) for signing licences; generate with scripts/gen-license-keys.ts. */
@@ -44,5 +45,7 @@ export function envFromProcess(): Env {
     STRIPE_SECRET_KEY: e.STRIPE_SECRET_KEY ?? "",
     LICENSE_PRIVATE_JWK: e.LICENSE_PRIVATE_JWK ?? "",
     STRIPE_PAYMENT_LINK_ID: e.STRIPE_PAYMENT_LINK_ID || undefined,
+    POSTHOG_KEY: e.POSTHOG_KEY || undefined,
+    POSTHOG_HOST: e.POSTHOG_HOST || undefined,
   };
 }

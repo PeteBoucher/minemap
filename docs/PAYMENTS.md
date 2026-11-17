@@ -49,6 +49,8 @@ Both accounts are free to open.
    | `STRIPE_SECRET_KEY` | `sk_test_…` | mark as sensitive |
    | `LICENSE_PRIVATE_JWK` | from step 1 | mark as sensitive |
    | `STRIPE_PAYMENT_LINK_ID` | `plink_…` | optional: only this link unlocks |
+   | `POSTHOG_KEY` | PostHog project API key (`phc_…`) | optional: turns on the audit trail |
+   | `POSTHOG_HOST` | `https://eu.i.posthog.com` | optional: the default |
 
    Redeploy after setting them. The `VITE_` values are built into the app.
 6. **Test.** Buy with Stripe's test card `4242 4242 4242 4242` (any future date, any CVC) and check:
@@ -59,6 +61,15 @@ Both accounts are free to open.
 Until these are set, the unlock button is disabled and says unlocking isn't set up. The free limits still apply.
 
 **Local testing:** `npm run dev` serves the app without the endpoints. To run both, install the Vercel CLI and run `vercel dev` with the values in `.env.local` (see `.env.example`).
+
+## Audit trail
+
+Stripe is the record of payments, refunds and tax. With `POSTHOG_KEY` set, the endpoints also send one PostHog event per request, so you can see every licence issued or refused:
+
+- **`license_unlock`:** `result` (`issued`, `refused`, `not_found`, `bad_input`, `not_configured`), `session_id`, `livemode`.
+- **`license_restore`:** the same results plus `stripe_error`, with `email_hash` (SHA-256 of the lower-cased email, never the email itself) and, when issued, the `session_id` that was restored.
+
+The `session_id` links each event to the Checkout Session in Stripe. Many `issued` restores for one `session_id` would show the email-restore trade-off below being abused. Events are sent without person profiles. A PostHog outage never blocks an unlock: the event is just lost.
 
 ## Free version limits
 

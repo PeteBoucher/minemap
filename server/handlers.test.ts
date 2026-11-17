@@ -87,3 +87,48 @@ describe("POST /api/restore", () => {
     expect((await restore({ email: "not-an-email" }, fakeStripe({}).fetchFn)).status).toBe(400);
   });
 });
+
+describe("audit trail", () => {
+  const audited = { POSTHOG_KEY: "phc_test", POSTHOG_HOST: "https://ph.test/" };
+  /** Stripe routes plus a PostHog capture endpoint; returns the captured events. */
+  function withPostHog(routes: Record<string, unknown>, posthogUp = true) {
+    const events: Record<string, any>[] = [];
+    const stripe = fakeStripe(routes).fetchFn;
+    const fetchFn = (async (url: string, init?: RequestInit) => {
+      if (!url.startsWith("https://ph.test/")) return stripe(url, init);
+      if (!posthogUp) throw new Error("PostHog down");
+      expect(url).toBe("https://ph.test/i/v0/e/");
+      events.push(JSON.parse(String(init?.body)));
+      return new Response("{}");
+    }) as typeof fetch;
+    return { fetchFn, events };
+  }
+
+  it("records issued and refused unlocks with the session id", async () => {
+    const ok = withPostHog({ "checkout/sessions/": session() });
+    await unlock("cs_test_abcdefghijkl", ok.fetchFn, { ...env, ...audited });
+    expect(ok.events[0]).toMatchObject({ api_key: "phc_test", event: "license_unlock", distinct_id: "cs_test_abcdefghijkl",
+      properties: { result: "issued", session_id: "cs_test_abcdefghijkl", livemode: false, $process_person_profile: false } });
+
+    const unpaid = withPostHog({ "checkout/sessions/": session({ payment_status: "unpaid" }) });
+    await unlock("cs_test_abcdefghijkl", unpaid.fetchFn, { ...env, ...audited });
+    expect(unpaid.events[0].properties.result).toBe("refused");
+  });
+
+  it("records restores with an email hash, never the email", async () => {
+    const { fetchFn, events } = withPostHog({ "checkout/sessions?": { data: [] } });
+    const r = await handleRestore(new Request("https://app.test/api/restore", { method: "POST", body: JSON.stringify({ email: "Buyer@Example.com" }) }), { ...env, ...audited }, fetchFn);
+    expect(r.status).toBe(404);
+    expect(events[0]).toMatchObject({ event: "license_restore", properties: { result: "not_found" } });
+    expect(events[0].properties.email_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.stringify(events[0]).toLowerCase()).not.toContain("buyer@example.com");
+  });
+
+  it("still unlocks when PostHog is down, and sends nothing when it isn't configured", async () => {
+    const down = withPostHog({ "checkout/sessions/": session() }, false);
+    expect((await unlock("cs_test_abcdefghijkl", down.fetchFn, { ...env, ...audited })).status).toBe(200);
+    const off = withPostHog({ "checkout/sessions/": session() });
+    await unlock("cs_test_abcdefghijkl", off.fetchFn);
+    expect(off.events).toHaveLength(0);
+  });
+});
