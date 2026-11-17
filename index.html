@@ -5,10 +5,89 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#2f7d4f" />
+    <meta name="description" content="A map companion for Minecraft: save places, plan routes, and line up your in-game map screenshots." />
     <title>Minemap</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" />
   </head>
   <body>
-    <div id="app"></div>
+    <div class="wrap">
+      <header class="top">
+        <div>
+          <h1>Minemap</h1>
+          <p class="sub">Tap two places to get distance and which way to face. Scroll or pinch to zoom, drag to move. North is up (−Z).</p>
+        </div>
+        <div class="worldbar" id="worldbar" hidden>
+          <label class="sr" for="worldSel">World</label>
+          <select id="worldSel"></select>
+          <details class="menu" id="worldMenu">
+            <summary aria-label="World options">•••</summary>
+            <div class="items">
+              <button type="button" data-act="new">New world…</button>
+              <button type="button" data-act="rename">Rename this world…</button>
+              <button type="button" data-act="demo">Load the demo world</button>
+              <hr />
+              <button type="button" data-act="export">Export backup</button>
+              <button type="button" data-act="import">Import backup…</button>
+              <hr />
+              <button type="button" data-act="delete" class="danger">Delete this world…</button>
+            </div>
+          </details>
+          <input type="file" id="importFile" accept="application/json,.json" hidden />
+        </div>
+      </header>
+
+      <section class="welcome" id="welcome" hidden>
+        <h2>WELCOME</h2>
+        <p>Keep track of your bases, villages and portals, see how far apart they are, and plan trips you can finish before dark.</p>
+        <div class="actions">
+          <button class="btn" type="button" id="startNew">Start my world</button>
+          <button class="btn ghost" type="button" id="startDemo">Try the demo world</button>
+        </div>
+      </section>
+
+      <div class="grid" id="main" hidden>
+        <div class="panel mapbox">
+          <div class="mapwrap">
+            <svg id="map" viewBox="0 0 600 600" role="img" aria-label="Map of saved places"></svg>
+            <p class="empty-map" id="emptyMap" hidden>Add your first place with its X and Z coordinates.</p>
+            <div class="zoom">
+              <button type="button" id="zoomIn" aria-label="Zoom in">+</button>
+              <button type="button" id="zoomOut" aria-label="Zoom out">−</button>
+              <button type="button" id="zoomFit" aria-label="Show everything" title="Show everything">⤢</button>
+            </div>
+          </div>
+          <div class="legend">
+            <span><i class="dot"></i>Place</span>
+            <span><i class="dot portal"></i>Nether portal</span>
+            <span><i class="dot village"></i>Village</span>
+            <span id="gridNote"></span>
+            <label id="mapsToggleWrap"><input type="checkbox" id="mapsToggle" /> Game maps</label>
+          </div>
+          <div class="legend" id="biomeLegend"></div>
+        </div>
+        <div class="panel">
+          <h2>PLACES</h2>
+          <div class="list" id="list"></div>
+          <div class="route" id="route"></div>
+          <form id="placeForm">
+            <h2 id="formTitle">ADD A PLACE</h2>
+            <input id="newName" placeholder="Name" aria-label="Name" required />
+            <input id="newX" type="number" placeholder="X" aria-label="X" required />
+            <input id="newZ" type="number" placeholder="Z" aria-label="Z" required />
+            <button class="btn" type="submit" id="formSubmit">Add</button>
+            <select id="newBiome" aria-label="Biome"><option value="">biome</option></select>
+            <div class="opts">
+              <label><input type="radio" name="kind" value="place" checked /> Place</label>
+              <label><input type="radio" name="kind" value="village" /> Village</label>
+              <label><input type="radio" name="kind" value="portal" /> Nether portal</label>
+              <button class="btn ghost" type="button" id="formCancel" hidden>Cancel</button>
+            </div>
+          </form>
+          <p class="note">Purple numbers are the matching Nether coordinates (÷8). Build a portal there to link straight to that spot.</p>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
