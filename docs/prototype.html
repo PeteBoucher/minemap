@@ -1,0 +1,661 @@
+<meta charset="utf-8">
+<title>Overworld Map</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: map panel left, place list + route finder right; stacks on phones */
+:root{
+  --bg:#eef1ec; --panel:#ffffff; --ink:#1f2a22; --muted:#5d6b61; --line:#d3dbd4;
+  --grid:#dfe6df; --land:#e6ede4; --accent:#2f7d4f; --accent2:#7a4fb3; --route:#c2571a;
+  --display:"Silkscreen", "Courier New", monospace;
+  --body:"IBM Plex Sans", system-ui, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141a16; --panel:#1c241f; --ink:#e3ebe5; --muted:#9aaa9f; --line:#2e3a32;
+  --grid:#25302a; --land:#18201b; --accent:#5cc488; --accent2:#b58ce8; --route:#f08a4b; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141a16; --panel:#1c241f; --ink:#e3ebe5; --muted:#9aaa9f; --line:#2e3a32;
+  --grid:#25302a; --land:#18201b; --accent:#5cc488; --accent2:#b58ce8; --route:#f08a4b; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:12px;line-height:1.5}
+.wrap{max-width:1100px;margin:0 auto;padding-inline:16px;padding-block:20px 32px}
+h1{font-family:var(--display);font-weight:400;font-size:1.6rem;margin:0 0 4px;letter-spacing:.02em;text-wrap:balance}
+.sub{color:var(--muted);margin:0 0 18px}
+.grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px}
+@media (max-width:760px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px;min-width:0}
+.mapbox{overflow:hidden}
+/* wide screens: map stays in view while the page scrolls */
+@media (min-width:761px){.mapbox{position:sticky;top:12px;align-self:start}}
+svg{display:block;width:100%;height:auto;background:var(--land);border-radius:4px;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+.mapwrap{position:relative}
+.zoom{position:absolute;right:8px;bottom:8px;display:flex;flex-direction:column;gap:4px}
+.zoom button{width:30px;height:30px;padding:0;font:600 1rem var(--mono);border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--ink);cursor:pointer}
+.zoom button:hover{border-color:var(--accent)}
+svg text{font-family:var(--mono);fill:var(--muted)}
+h2{font-family:var(--display);font-weight:400;font-size:.95rem;letter-spacing:.06em;margin:0 0 10px;color:var(--muted)}
+.list{display:flex;flex-direction:column;gap:6px;margin-bottom:16px;max-height:55vh;overflow-y:auto;overscroll-behavior:contain;padding:3px 6px 3px 3px}
+.place{display:grid;grid-template-columns:14px 1fr auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:4px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.place:hover{border-color:var(--accent)}
+.place:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.place.sel-a{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.place.sel-b{border-color:var(--route);box-shadow:inset 3px 0 0 var(--route)}
+.dot{width:12px;height:12px;border-radius:2px;background:var(--accent)}
+.dot.portal{background:var(--accent2)}
+.dot.village{border-radius:50%}
+.pname{font-weight:600;min-width:0}
+.rm{display:inline-block;margin-left:8px;padding:0 6px;border:1px solid var(--line);border-radius:4px;color:var(--muted);font-weight:400;line-height:1.3}
+.rm:hover,.rm:focus-visible{color:var(--route);border-color:var(--route)}
+.coords{font-family:var(--mono);font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.coords .n{color:var(--accent2)}
+.route{border-top:1px solid var(--line);padding-top:12px}
+.route p{margin:0 0 8px;color:var(--muted);font-size:.9rem}
+.stats{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-family:var(--mono);font-size:.88rem;font-variant-numeric:tabular-nums}
+.stats dt{color:var(--muted)} .stats dd{margin:0}
+.big{font-size:1.15rem;font-weight:600;color:var(--route)}
+.verdict{font-weight:600}
+.verdict.ok{color:var(--accent)} .verdict.warn,.verdict.bad{color:var(--route)}
+.verdict.bad::before{content:"⚠ "}
+.pace{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:.88rem;color:var(--muted)}
+.pace select{flex:1}
+form{display:grid;grid-template-columns:1fr 70px 70px auto;gap:6px;margin-top:14px}
+@media (max-width:420px){form{grid-template-columns:1fr 1fr}}
+form .opts{grid-column:2/-1;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:.88rem;color:var(--muted)}
+form .opts label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+@media (max-width:420px){form #newBiome,form .opts{grid-column:1/-1}}
+input,select{font:inherit;font-size:.9rem;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);min-width:0}
+button.add{font:inherit;font-size:.9rem;padding:6px 12px;border:0;border-radius:4px;background:var(--accent);color:var(--panel);cursor:pointer;font-weight:600}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;font-size:.82rem;color:var(--muted)}
+.legend label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.note{font-size:.82rem;color:var(--muted);margin-top:10px}
+</style>
+
+<div class="wrap">
+  <h1>Overworld Map</h1>
+  <p class="sub">Tap two places to get distance and which way to face. Scroll or pinch to zoom, drag to move. North is up (−Z).</p>
+  <div class="grid">
+    <div class="panel mapbox">
+      <div class="mapwrap">
+        <svg id="map" viewBox="0 0 600 600" role="img" aria-label="Map of saved places"></svg>
+        <div class="zoom">
+          <button type="button" id="zoomIn" aria-label="Zoom in">+</button>
+          <button type="button" id="zoomOut" aria-label="Zoom out">−</button>
+          <button type="button" id="zoomFit" aria-label="Show everything" title="Show everything">⤢</button>
+        </div>
+      </div>
+      <div class="legend">
+        <span><i class="dot"></i>Place</span>
+        <span><i class="dot portal"></i>Nether portal</span>
+        <span><i class="dot village"></i>Village</span>
+        <span id="gridNote">Grid: 250 blocks</span>
+        <label><input type="checkbox" id="mapsToggle"> Game maps</label>
+      </div>
+      <div class="legend" id="biomeLegend"></div>
+    </div>
+    <div class="panel">
+      <h2>PLACES</h2>
+      <div class="list" id="list"></div>
+      <div class="route" id="route"></div>
+      <form id="addForm">
+        <input id="newName" placeholder="New place" required>
+        <input id="newX" type="number" placeholder="X" required>
+        <input id="newZ" type="number" placeholder="Z" required>
+        <button class="add" type="submit">Add</button>
+        <select id="newBiome" aria-label="Biome"><option value="">biome</option></select>
+        <div class="opts">
+          <label><input type="checkbox" id="newVillage"> Village</label>
+          <label><input type="checkbox" id="newPortal"> Nether portal</label>
+        </div>
+      </form>
+      <button class="add" id="copyBtn" type="button" style="margin-top:8px">Copy as code</button>
+      <pre id="codeOut" hidden style="font-family:var(--mono);font-size:.8rem;white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);padding:8px;border-radius:4px;margin-top:8px"></pre>
+      <p class="note">Purple numbers are the matching Nether coords (÷8). Build a portal there to link straight to that spot. Places added here are temporary. Tap "Copy as code" and paste the lines into the list at the top of the file to keep them.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================================================
+   YOUR PLACES - edit this list to add or change spots.
+   One line per place: name, X, Z.
+   Add  portal:true  to show it as a Nether portal.
+   Add  biome:"plains"  to tint the map around it (names are in BIOMES below).
+   Keep the comma at the end of each line.
+   ===================================================== */
+const base=[
+  {name:"World spawn point", x:-23, z:-24, biome:"snowy_plains"},
+  {name:"Hobbiton", x:107, z:836, village:true, biome:"plains"},
+  {name:"Fishing hut", x:-73, z:939, biome:"beach"},
+  {name:"Floating Seafort", x:-201, z:969, biome:"ocean"},
+  {name:"Cliffton", x:726, z:1740, village:true, biome:"windswept_hills"},
+  {name:"Nether portal", x:401, z:935, portal:true, biome:"plains"},
+  {name:"Trial Chamber", x:158, z:2304, biome:"stony_shore"},
+  {name:"Horse corral", x:430, z:2322, biome:"plains"},
+  {name:"Valley shelter", x:684, z:1982, biome:"river"},
+  {name:"Costal shelter", x:525, z:2155, biome:"stony_shore"},
+  {name:"Fjord shelter", x:1114, z:2146, biome:"river"},
+  {name:"Mountain Village", x:1243, z:2342, village:true, biome:"snowy_slopes"},
+  {name:"Snow Peak", x:1221, z:2554, biome:"snowy_slopes"},
+  {name:"Taiga canyon shelter", x:1743, z:1077, biome:"frozen_river"},
+  {name:"Taiga Village", x:1661, z:1154, village:true, biome:"snowy_taiga"},
+  {name:"Frozen lake Village", x:205, z:217, village:true, biome:"frozen_river"},
+  {name:"Repaired Nether portal", x:1551, z:2107, portal:true, biome:"forest"},
+  {name:"Ice Forge Village", x:822, z:608, village:true, biome:"snowy_plains"},
+  {name:"Lighthouse", x:-460, z:1023, biome:"beach"},
+  {name:"Fishing Village", x:232, z:1447, biome:"stony_shore"},
+  {name:"Nether Portal base", x:354, z:1064, biome:"plains"},
+  {name:"Snowy village", x:1368, z:694, village:true, biome:"snowy_plains"},
+  {name:"Shelter", x:1761, z:1217},
+  {name:"Shelter", x:1746, z:1308},
+  {name:"Mountain pass", x:1404, z:1001, biome:"windswept_hills"},
+  {name:"ocean", x:-870, z:4500, biome:"ocean"},
+  {name:"Landfall shelter", x:-1079, z:4655, biome:"beach"},
+  {name:"Pillager village", x:-1907, z:5552, village:true, biome:"savanna"},
+  {name:"Acacia shelter", x:-2818, z:6424, biome:"savanna"},
+  {name:"Shelter", x:-3289, z:7745, biome:"forest"},
+  {name:"Shelter", x:-3307, z:8644, biome:"snowy_taiga"},
+  {name:"Mansion shelter", x:-3245, z:9517, biome:"pale_garden"},
+  {name:"river", x:-100, z:2050, biome:"river"},
+  {name:"Beach shelter", x:-185, z:1950, biome:"beach"},
+  {name:"Forest shelter", x:-466, z:2283, biome:"forest"},
+  {name:"Recovered Nether portal 2", x:-308, z:2125, biome:"plains"},
+  {name:"Mansion village", x:-3550, z:9450, village:true, biome:"river"},
+  {name:"Island shelter", x:-727, z:3682, biome:"beach"},
+  {name:"island", x:-1406, z:3566},
+  {name:"Island shelter 2", x:-1977, z:3652, biome:"stony_shore"},
+  {name:"Recovered nether portal 3", x:-1918, z:4700, biome:"plains"},
+  {name:"Sunken structure", x:-1818, z:3671, biome:"ocean"},
+  {name:"Wood cabin", x:-1341, z:3830, biome:"beach"},
+  {name:"Inlet", x:-801, z:3054, biome:"river"},
+  {name:"Cliff shelter", x:-795, z:3059, biome:"stony_shore"},
+  {name:"Bamboo shelter", x:-201, z:3363, biome:"bamboo_jungle"},
+  {name:"Fjord shelter", x:-225, z:2068, biome:"river"},
+  {name:"Grove shelter", x:-186, z:1960, biome:"dappled_forest"},
+  {name:"Cave entrance", x:222, z:1196, biome:"forest"},
+  {name:"Ruined nether portal 1", x:715, z:1348, portal:true, biome:"snowy_plains"},
+  {name:"Taiga village", x:857, z:1216, biome:"snowy_plains", village:true},
+  {name:"Lava pool", x:655, z:1773},
+  {name:"Taiga village ruined portal", x:739, z:159, portal:true, biome:"snowy_taiga"},
+  {name:"Frozen lake shelter", x:323, z:403, biome:"frozen_river"},
+  {name:"Mountain shelter", x:1201, z:1506},
+  {name:"Mountain shelter", x:1674, z:1639},
+  {name:"Canyon shelter", x:1779, z:1868},
+  {name:"Mountain village", x:1820, z:1868},
+  {name:"Crevice shelter", x:1414, z:574},
+  {name:"Cold river shelter", x:1280, z:986, biome:"river"},
+  {name:"Iceberg shelter", x:1246, z:-53, biome:"frozen_river"},
+  {name:"Campfire village", x:1464, z:283, biome:"snowy_taiga", village:true},
+  {name:"Possible vault", x:-285, z:1131, biome:"ocean"},
+  {name:"Recovered nether portal", x:-389, z:750, biome:"snowy_slopes"},
+  {name:"Turtle beach", x:-377, z:996, biome:"beach"},
+  {name:"Sunken house", x:-526, z:1037, biome:"ocean"},
+  {name:"Plains Shelter", x:1113, z:1744},
+  {name:"Hilltop shelter", x:1479, z:1807},
+  {name:"Waterwall", x:1445, z:1538, biome:"river"},
+  {name:"Portal Shelter", x:-899, z:1474, biome:"beach", portal:true},
+  {name:"Shelter", x:-329, z:1590, biome:"beach"},
+  {name:"Plains shelter", x:-319, z:2135, biome:"plains"},
+  {name:"Stone shelter", x:-343, z:2439, biome:"forest"},
+  {name:"Jungle ruin", x:-274, z:3188, biome:"jungle"},
+  {name:"dropped items", x:-380, z:3243, biome:"jungle"},
+  {name:"Handy Island", x:157, z:2195, biome:"ocean"},
+  {name:"Deep cave", x:-10, z:3265},
+  {name:"Savanna village", x:-1507, z:4547, biome:"savanna"},  // {name:"New place", x:0, z:0, biome="plains"},
+];
+/* ===================================================== */
+/* Biome tint colours. Add a line here to use a new biome name. */
+const BIOMES={
+  plains:"#7fb24a", forest:"#3f8a3a", birch_forest:"#6fa860", dark_forest:"#2a5a2a", taiga:"#2f6f5a",
+  jungle:"#4fa81f", swamp:"#5a6f3a", savanna:"#b5a84a", desert:"#e0c070", badlands:"#c8743a",
+  beach:"#e8cf5a", stony_shore:"#9a9a86", windswept_hills:"#7d8a6a", stony_peaks:"#8a8a8a",
+  snowy_plains:"#e3e5f2", snowy_slopes:"#9fb8d8", snowy_taiga:"#4f8f86", frozen_river:"#6fa8e8",
+  river:"#4f90e0", ocean:"#3f76c4", cherry_grove:"#f0a0c8", mushroom_fields:"#b070b0",
+  dappled_forest:"#f08c2e", bamboo_jungle:"#4f8f5a", lush_caves:"#4f8f5a", dripstone_caves:"#6f6f5a", pale_garden:"#c0c0e0"
+};
+const biomeCol=b=>BIOMES[b]||"#888888";
+/* =====================================================
+   DAY TRAVEL - how far you get in one day's daylight.
+   DAYLIGHT = usable minutes of daylight (a Minecraft day is about 10).
+   SPARE = minutes kept back at the end to build or reach a shelter.
+   bps = straight-line blocks per second, allowing for detours,
+   climbing and fighting (a clear sprint is about 5.6).
+   ===================================================== */
+const DAYLIGHT=10,SPARE=2;
+const PACES={
+  auto:{label:"Auto (from biomes)"},
+  open:{label:"Open ground", bps:3},
+  mixed:{label:"Mixed", bps:1.5},
+  rough:{label:"Jungle / mountains", bps:0.75},
+  boat:{label:"Open water (boat)", bps:6},
+};
+/* Auto pace: which pace each biome counts as. Biomes not listed, and
+   ground more than BIOME_RANGE blocks from any pinned biome, count as UNKNOWN_PACE. */
+const BIOME_PACE={
+  plains:"open", snowy_plains:"open", savanna:"open", desert:"open", beach:"open", frozen_river:"open", mushroom_fields:"open",
+  forest:"mixed", birch_forest:"mixed", taiga:"mixed", snowy_taiga:"mixed", stony_shore:"mixed", cherry_grove:"mixed", river:"mixed", dappled_forest:"mixed",
+  jungle:"rough", bamboo_jungle:"rough", dark_forest:"rough", pale_garden:"rough", swamp:"rough", windswept_hills:"rough",
+  stony_peaks:"rough", snowy_slopes:"rough", badlands:"rough", lush_caves:"rough", dripstone_caves:"rough",
+  ocean:"boat",
+};
+const UNKNOWN_PACE="mixed",BIOME_RANGE=450,STEP=16;
+let pace="auto";
+try{const p=localStorage.getItem("mcPace");if(PACES[p])pace=p}catch(e){}
+// nearest pinned biome within BIOME_RANGE blocks, or null
+function biomeAt(B,x,z){
+  let near=null,nd=BIOME_RANGE;
+  for(const p of B){const d=Math.hypot(p.x-x,p.z-z);if(d<nd){nd=d;near=p}}
+  return near?{biome:near.biome,d:nd}:null;
+}
+const biomePins=()=>places().filter(p=>p.biome);
+function bpsAt(B,x,z){
+  if(pace!=="auto")return PACES[pace].bps;
+  const t=terrainAt(x,z);
+  if(t)return PACES[t.pace].bps; // map screenshot beats the biome guess
+  const n=biomeAt(B,x,z);
+  return PACES[(n&&BIOME_PACE[n.biome])||UNKNOWN_PACE].bps;
+}
+// seconds to travel a→b in a straight line, plus blocks covered in each biome
+function travel(a,b){
+  const B=biomePins(),dx=b.x-a.x,dz=b.z-a.z,d=Math.hypot(dx,dz),n=Math.max(1,Math.ceil(d/STEP)),seg=d/n,by={};
+  let secs=0;
+  for(let i=0;i<n;i++){
+    const t=(i+.5)/n,x=a.x+dx*t,z=a.z+dz*t,tm=pace==="auto"&&terrainAt(x,z),bm=biomeAt(B,x,z);
+    const k=tm?tm.label:bm?bm.biome:"unknown";
+    secs+=seg/bpsAt(B,x,z);by[k]=(by[k]||0)+seg;
+  }
+  return {secs,by};
+}
+// how far you get from a place in each of 72 directions: one day, and half a day (there & back)
+let reachCache={};
+function reach(a){
+  const key=`${a.x},${a.z}|${pace}|${places().length}|${terrainVer}`;
+  if(reachCache.key===key)return reachCache.val;
+  const B=biomePins(),budget=DAYLIGHT*60,full=[],half=[];
+  for(let k=0;k<72;k++){
+    const th=k*5*Math.PI/180,ux=Math.sin(th),uz=-Math.cos(th); // k=0 is north
+    let r=0,t=0,h=null;
+    while(r<5000){
+      const bps=bpsAt(B,a.x+ux*(r+STEP/2),a.z+uz*(r+STEP/2)),dt=STEP/bps;
+      if(h==null&&t+dt>budget/2)h=r+(budget/2-t)*bps;
+      if(t+dt>budget){r+=(budget-t)*bps;break}
+      t+=dt;r+=STEP;
+    }
+    full.push(r);half.push(h??r);
+  }
+  reachCache={key,val:{full,half}};
+  return reachCache.val;
+}
+/* =====================================================
+   GAME MAP SCREENSHOTS - shown when "Game maps" is ticked.
+   One line per screenshot (keep the image files in this folder):
+   x, z = the map's north-west corner, size = blocks across
+   (128 for a new map, doubling each time it is zoomed out: 256, 512, 1024, 2048).
+   ===================================================== */
+const MAPS=[
+  {file:"images/2026101214134500-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:1472, z:960, size:512},
+  {file:"images/2026101214142500-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:1728, z:1216, size:128},
+  {file:"images/2026110417475100-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:704, z:1600, size:128},
+  {file:"images/2026101215172000-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:576, z:1600, size:128},
+  {file:"images/2026101419105900-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:-3648, z:9152, size:512},
+  {file:"images/2026102414202700-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:-64, z:-64, size:2048},
+  {file:"images/2026103018143000-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:-64, z:-64, size:2048},
+  {file:"images/2026103018152800-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:960, z:-64, size:512},
+  {file:"images/2026103018150000-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:1216, z:192, size:256},
+  {file:"images/2026103018140700-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:1344, z:320, size:128},
+  {file:"images/2026110415391900-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:-64, z:960, size:256},
+  {file:"images/2026110617254700-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:-1088, z:1472, size:256},
+  {file:"images/2026111218004200-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:-1984, z:4672, size:128},
+  {file:"images/2026111113464800-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:-320, z:1984, size:256},
+  {file:"images/2026111016273900-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:-320, z:2112, size:128},
+  {file:"images/2026103018151300-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:1472, z:192, size:128},
+  {file:"images/2026110417534100-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:192, z:1344, size:128},
+  {file:"images/2026110417541600-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:448, z:1472, size:256},
+  {file:"images/2026111217323500-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:-1344, z:3776, size:256},
+  {file:"images/2026111217324500-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:-832, z:3520, size:256},
+  {file:"images/2026111116561200-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:64, z:2368, size:128, crop:{x:49,y:60,size:542}}, // split-screen
+  {file:"images/2026111016271400-11B64E28AD7A49CA9EC8AC007BE858C6.jpg", x:-576, z:960, size:256},
+];
+// where the map square sits inside a 1280x720 Switch screenshot of a held map
+// (a map line can override this with its own crop:{x,y,size}, e.g. for a split-screen screenshot)
+const CROP={x:368,y:59.5,size:544};
+/* =====================================================
+   MAP TERRAIN - hidden hints read from the screenshots above.
+   Used by the Auto pace only (not drawn). The page has to be opened
+   through a local web server for the browser to read the images.
+   Each TCELL-block square gets a pace from the map colours within
+   TCELL blocks of its centre; smaller (more detailed) maps win.
+   ===================================================== */
+const TCELL=32,HUD_Y=580; // screenshot rows below HUD_Y are hidden by the hotbar
+// map colours measured from Switch screenshots: [terrain, r, g, b]
+const MAP_COLOURS=[
+  ["grass",120,168,72],["grass",144,192,96],["grass",96,144,48],["grass",120,144,72],["grass",96,144,72],["grass",96,120,48],
+  ["tree",48,72,24],["tree",24,48,24],["tree",24,48,0],["tree",72,96,48],["tree",24,72,24],["tree",72,120,48],
+  ["water",0,48,144],["water",0,48,168],["water",0,48,120],["water",24,72,168],["water",24,48,120],["water",0,24,120],
+  ["ice",144,120,216],["ice",144,120,192],["ice",120,120,192],["ice",144,144,216],["ice",120,120,216],
+  ["snow",216,216,216],["snow",240,240,240],["snow",216,216,192],["snow",192,192,192],["snow",216,192,192],
+  ["stone",168,168,168],["stone",120,120,120],["stone",96,96,96],["stone",72,72,72],["stone",48,48,48],
+  ["dirt",120,96,72],["dirt",72,48,24],["dirt",120,96,48],["dirt",96,72,48],["dirt",48,48,24],
+  ["blank",216,168,120],["blank",216,168,144],["blank",216,192,144],["blank",192,168,144],["blank",168,144,96],
+];
+function mapClass(r,g,b){
+  let best=null,bd=40*40*3;
+  for(const [k,R,G,B] of MAP_COLOURS){const d=(r-R)**2+(g-G)**2+(b-B)**2;if(d<bd){bd=d;best=k}}
+  return best==="blank"?null:best; // unexplored parchment or unclear colour = no data
+}
+// px(x,y) gives [r,g,b] at 1280x720 screenshot coordinates; returns [cellKey, {pace,label}] pairs
+function terrainFromMap(m,px){
+  const C=m.crop||CROP,N=128,P=C.size/N,bpp=m.size/N,cls=[];
+  for(let j=0;j<N;j++)for(let i=0;i<N;i++){
+    const y=C.y+(j+.5)*P;
+    cls.push(y>HUD_Y?null:mapClass(...px(Math.round(C.x+(i+.5)*P),Math.round(y))));
+  }
+  const out=[],clamp=v=>Math.max(0,Math.min(N-1,v));
+  for(let cz=Math.floor(m.z/TCELL);cz*TCELL<m.z+m.size;cz++)for(let cx=Math.floor(m.x/TCELL);cx*TCELL<m.x+m.size;cx++){
+    const mx=(cx+.5)*TCELL-m.x,mz=(cz+.5)*TCELL-m.z,c={};
+    let total=0,known=0;
+    for(let j=clamp(Math.floor((mz-TCELL)/bpp));j<=clamp(Math.floor((mz+TCELL)/bpp));j++)
+      for(let i=clamp(Math.floor((mx-TCELL)/bpp));i<=clamp(Math.floor((mx+TCELL)/bpp));i++){
+        total++;const k=cls[j*N+i];if(k){known++;c[k]=(c[k]||0)+1}
+      }
+    if(known<4||known<total*.5)continue;
+    const f=k=>(c[k]||0)/known,rock=f("stone")+f("dirt");
+    let pace,label;
+    if(f("water")>=.6){pace="boat";label="water"}
+    else if(f("tree")>=.35){pace="rough";label="dense trees"}
+    else if(rock>=.3){pace="rough";label="rocky"}
+    else if(f("tree")>=.12||f("water")>=.25||rock>=.12){pace="mixed";label="broken ground"}
+    else{pace="open";label="open ground"}
+    out.push([`${cx},${cz}`,{pace,label:label+" (map)"}]);
+  }
+  return out;
+}
+let terrain=new Map(),terrainVer=0,terrainBlocked=false;
+const terrainAt=(x,z)=>terrain.get(`${Math.floor(x/TCELL)},${Math.floor(z/TCELL)}`);
+function loadTerrain(){
+  const order=MAPS.slice().sort((a,b)=>b.size-a.size);
+  Promise.all(order.map(m=>new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{
+      try{
+        const c=document.createElement("canvas");c.width=img.naturalWidth;c.height=img.naturalHeight;
+        const ctx=c.getContext("2d",{willReadFrequently:true});ctx.drawImage(img,0,0);
+        const d=ctx.getImageData(0,0,c.width,c.height).data,sc=c.width/1280;
+        res(terrainFromMap(m,(x,y)=>{const o=(Math.round(y*sc)*c.width+Math.round(x*sc))*4;return [d[o],d[o+1],d[o+2]]}));
+      }catch(e){terrainBlocked=true;res([])} // opened as a file: the browser won't let the page read pixels
+    };
+    img.onerror=()=>res([]);
+    img.src=m.file;
+  }))).then(results=>{
+    terrain=new Map();
+    results.forEach(r=>r.forEach(([k,v])=>terrain.set(k,v))); // biggest map first, so detailed maps overwrite
+    terrainVer++;reachCache={};render();
+  });
+}
+let showMaps=true;
+try{showMaps=localStorage.getItem("mcMaps")!=="off"}catch(e){}
+let extra=[];
+try{extra=JSON.parse(localStorage.getItem("mcExtra")||"[]")}catch(e){}
+// drop saved extras that have since been pasted into the list above, so they don't draw over it
+extra=extra.filter(p=>!base.some(b=>b.x===p.x&&b.z===p.z));
+try{localStorage.setItem("mcExtra",JSON.stringify(extra))}catch(e){}
+let sel=[];
+let view={k:1,cx:null,cz:null},T=null; // zoom state, and the transform draw() last used
+const places=()=>base.concat(extra);
+const svg=document.getElementById("map"),NS="http://www.w3.org/2000/svg";
+function el(t,a,txt){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;return e}
+function dirName(dx,dz){const a=(Math.atan2(dx,-dz)*180/Math.PI+360)%360;return ["N","NE","E","SE","S","SW","W","NW"][Math.round(a/45)%8]}
+function yaw(dx,dz){let y=Math.atan2(-dx,dz)*180/Math.PI;return Math.round(y)}
+
+function draw(){
+  const P=places();svg.innerHTML="";
+  let xs=P.map(p=>p.x),zs=P.map(p=>p.z);
+  let minX=Math.min(...xs),maxX=Math.max(...xs),minZ=Math.min(...zs),maxZ=Math.max(...zs);
+  // fit = the view that shows every place; view.k zooms in from there around view.cx, view.cz
+  const fitSpan=Math.max(maxX-minX,maxZ-minZ,400)*1.35,fcx=(minX+maxX)/2,fcz=(minZ+maxZ)/2;
+  const span=fitSpan/view.k,slack=(fitSpan-span)/2;
+  const cx=view.cx==null?fcx:Math.min(fcx+slack,Math.max(fcx-slack,view.cx));
+  const cz=view.cz==null?fcz:Math.min(fcz+slack,Math.max(fcz-slack,view.cz));
+  const x0=cx-span/2,z0=cz-span/2,S=600/span;
+  T={x0,z0,S,span};
+  const sx=x=>(x-x0)*S,sz=z=>(z-z0)*S;
+  // biome tint: 64-block tiles take the biome of the nearest place within 450 blocks, fading with distance
+  let cell=64;while(cell*S<6)cell*=2; // bigger tiles when zoomed far out
+  const B=P.filter(p=>p.biome),cw=(cell*S).toFixed(2),tiles={};
+  for(let gx=Math.floor(x0/cell)*cell;gx<x0+span;gx+=cell)for(let gz=Math.floor(z0/cell)*cell;gz<z0+span;gz+=cell){
+    const n=biomeAt(B,gx+cell/2,gz+cell/2);
+    if(!n)continue;
+    const k=n.biome+"|"+(n.d<150?.6:n.d<300?.4:.2);
+    tiles[k]=(tiles[k]||"")+`M${sx(gx).toFixed(2)},${sz(gz).toFixed(2)}h${cw}v${cw}h-${cw}z`;
+  }
+  for(const k in tiles){const [b,o]=k.split("|");svg.append(el("path",{d:tiles[k],fill:biomeCol(b),"fill-opacity":o,"shape-rendering":"crispEdges"}))}
+  // game map screenshots, biggest first so detailed maps sit on top
+  if(showMaps){
+    MAPS.slice().sort((a,b)=>b.size-a.size).forEach((m,i)=>{
+      const C=m.crop||CROP,cp=el("clipPath",{id:"mapCrop"+i});
+      cp.append(el("rect",{x:C.x,y:C.y,width:C.size,height:C.size}));svg.append(cp);
+      svg.append(el("image",{href:m.file,width:1280,height:720,"clip-path":`url(#mapCrop${i})`,style:"image-rendering:pixelated",
+        transform:`translate(${sx(m.x)},${sz(m.z)}) scale(${m.size*S/C.size}) translate(${-C.x},${-C.y})`}));
+    });
+  }
+  const step=[50,100,250,500,1000,2500,5000].find(v=>v*S>=34)||10000;
+  document.getElementById("gridNote").textContent=`Grid: ${step.toLocaleString("en-GB")} blocks`;
+  for(let g=Math.ceil(x0/step)*step;g<x0+span;g+=step){
+    svg.append(el("line",{x1:sx(g),x2:sx(g),y1:0,y2:600,stroke:"var(--grid)","stroke-width":1}));
+    svg.append(el("text",{x:sx(g)+3,y:594,"font-size":10},g));
+  }
+  for(let g=Math.ceil(z0/step)*step;g<z0+span;g+=step){
+    svg.append(el("line",{y1:sz(g),y2:sz(g),x1:0,x2:600,stroke:"var(--grid)","stroke-width":1}));
+    svg.append(el("text",{x:4,y:sz(g)-3,"font-size":10},g));
+  }
+  // compass
+  const c=el("g",{transform:"translate(560,40)"});
+  c.append(el("circle",{r:18,fill:"var(--panel)",stroke:"var(--line)"}));
+  c.append(el("path",{d:"M0,-13 L5,2 L0,-2 L-5,2Z",fill:"var(--route)"}));
+  c.append(el("text",{y:12,"text-anchor":"middle","font-size":9,style:"fill:var(--ink)"},"N"));
+  svg.append(c);
+  // one day's reach around the starting place: solid = one way, dashed = there and back
+  // (with Auto pace the shape stretches over easy ground and shrinks over jungle)
+  if(sel.length){
+    const a=P[sel[0]],{full,half}=reach(a),cx0=sx(a.x),cz0=sz(a.z);
+    const shape=rs=>rs.map((r,k)=>{const th=k*5*Math.PI/180;return `${k?"L":"M"}${(cx0+Math.sin(th)*r*S).toFixed(1)},${(cz0-Math.cos(th)*r*S).toFixed(1)}`}).join("")+"Z";
+    svg.append(el("path",{d:shape(full),fill:"var(--route)","fill-opacity":.08,stroke:"var(--route)","stroke-width":1.5,"stroke-linejoin":"round"}));
+    svg.append(el("path",{d:shape(half),fill:"none",stroke:"var(--route)","stroke-width":1.2,"stroke-dasharray":"4 4","stroke-linejoin":"round"}));
+    const lab=(y,t)=>svg.append(el("text",{x:cx0,y,"text-anchor":"middle","font-size":10,style:"fill:var(--route);paint-order:stroke;stroke:var(--land);stroke-width:3px"},t));
+    lab(cz0-full[0]*S-4,"1 day");
+    if(half[0]*S>40)lab(cz0-half[0]*S-4,"there & back");
+  }
+  if(sel.length===2){
+    const a=P[sel[0]],b=P[sel[1]];
+    svg.append(el("line",{x1:sx(a.x),y1:sz(a.z),x2:sx(b.x),y2:sz(b.z),stroke:"var(--route)","stroke-width":2.5,"stroke-dasharray":"6 4"}));
+  }
+  // areas already taken on the map: every pin to start with, then each label as it is placed
+  const boxes=P.map(p=>[sx(p.x)-9,sz(p.z)-10,sx(p.x)+9,sz(p.z)+10]);
+  const over=(a,b)=>Math.max(0,Math.min(a[2],b[2])-Math.max(a[0],b[0]))*Math.max(0,Math.min(a[3],b[3])-Math.max(a[1],b[1]));
+  P.forEach((p,i)=>{
+    if(sx(p.x)<-20||sx(p.x)>620||sz(p.z)<-20||sz(p.z)>620)return; // off the visible map
+    const g=el("g",{transform:`translate(${sx(p.x)},${sz(p.z)})`,style:"cursor:pointer"});
+    const s=sel.indexOf(i);
+    const col=s===0?"var(--accent)":s===1?"var(--route)":p.portal?"var(--accent2)":"var(--accent)";
+    if(p.portal) g.append(el("rect",{x:-6,y:-9,width:12,height:18,fill:col,stroke:"var(--panel)","stroke-width":2}));
+    else if (p.village) g.append(el("circle",{cx:0,cy:0,r:7,fill:col,stroke:"var(--panel)","stroke-width":2}));
+    else g.append(el("rect",{x:-7,y:-7,width:14,height:14,fill:col,stroke:"var(--panel)","stroke-width":2}));
+    const t=el("text",{"font-size":12,"font-weight":600,style:"fill:var(--ink);paint-order:stroke;stroke:var(--land);stroke-width:3px"},p.name);
+    g.append(t);
+    g.addEventListener("click",()=>pick(i));
+    svg.append(g);
+    // try each spot around the pin and keep the one that overlaps other pins and labels least
+    const px=sx(p.x),pz=sz(p.z);
+    let w=0;try{w=t.getComputedTextLength()}catch(e){}
+    if(!w)w=p.name.length*7.4;
+    let opts=[["start",12,4],["end",-12,4],["start",10,-9],["start",10,17],["end",-10,-9],["end",-10,17],["middle",0,-13],["middle",0,22]];
+    if(px>=420)opts=[1,0,4,5,2,3,6,7].map(k=>opts[k]);
+    let best=null;
+    for(const [anchor,x,y] of opts){
+      const bx=px+x-(anchor==="end"?w:anchor==="middle"?w/2:0);
+      const box=[bx-1,pz+y-11,bx+w+1,pz+y+3];
+      const cost=boxes.reduce((n,o)=>n+over(box,o),0)+3*((w+2)*14-over(box,[0,0,600,600]));
+      if(!best||cost<best.cost)best={cost,anchor,x,y,box};
+      if(cost<.5)break;
+    }
+    t.setAttribute("x",best.x);t.setAttribute("y",best.y);t.setAttribute("text-anchor",best.anchor);
+    boxes.push(best.box);
+  });
+}
+function pick(i){
+  if(sel.includes(i)) sel=sel.filter(s=>s!==i);
+  else if(sel.length<2) sel.push(i);
+  else sel=[sel[1],i];
+  render();
+}
+function list(){
+  const L=document.getElementById("list");L.innerHTML="";
+  // show sorted by class (place, portal, village) then name; i stays the index into places()
+  const cls=p=>p.portal?1:p.village?2:0;
+  places().map((p,i)=>[p,i]).sort(([a],[b])=>cls(a)-cls(b)||a.name.localeCompare(b.name)).forEach(([p,i])=>{
+    const b=document.createElement("button");b.type="button";
+    b.className="place"+(sel[0]===i?" sel-a":sel[1]===i?" sel-b":"");
+    b.innerHTML=`<i class="dot${p.portal?" portal":p.village?" village":""}"></i><span class="pname"></span><span class="coords">${p.x}, ${p.z}<br><span class="n">N ${Math.round(p.x/8)}, ${Math.round(p.z/8)}</span></span>`;
+    b.querySelector(".pname").textContent=p.name;
+    // places saved in this browser (not yet in the list above) get a remove button
+    if(i>=base.length){
+      const rm=document.createElement("span");rm.className="rm";rm.textContent="×";
+      rm.setAttribute("role","button");rm.tabIndex=0;rm.title="Remove this saved place";rm.setAttribute("aria-label","Remove "+p.name);
+      const go=e=>{e.stopPropagation();e.preventDefault();removeExtra(i)};
+      rm.onclick=go;rm.onkeydown=e=>{if(e.key==="Enter"||e.key===" ")go(e)};
+      b.querySelector(".pname").append(rm);
+    }
+    b.onclick=()=>pick(i);L.append(b);
+  });
+}
+function removeExtra(i){
+  extra.splice(i-base.length,1);
+  try{localStorage.setItem("mcExtra",JSON.stringify(extra))}catch(e){}
+  sel=sel.filter(s=>s!==i).map(s=>s>i?s-1:s);
+  render();
+}
+function paceSelect(){
+  const s=document.createElement("select");s.setAttribute("aria-label","Travel pace");
+  for(const k in PACES)s.add(new Option(PACES[k].bps?`${PACES[k].label} · ${(PACES[k].bps*DAYLIGHT*60).toLocaleString("en-GB")} blocks/day`:PACES[k].label,k));
+  s.value=pace;
+  s.onchange=()=>{pace=s.value;try{localStorage.setItem("mcPace",pace)}catch(e){}render()};
+  const w=document.createElement("label");w.className="pace";w.append("Pace ",s);
+  if(pace!=="auto"||!terrainBlocked)return w;
+  const box=document.createElement("div"),n=document.createElement("p");
+  n.className="note";n.textContent="Game map terrain isn't used: open this page through a local web server so it can read the screenshots.";
+  box.append(w,n);return box;
+}
+function route(){
+  const R=document.getElementById("route"),P=places();
+  if(sel.length<2){
+    R.innerHTML=`<h2>ROUTE</h2><p>${sel.length?"Now pick where you're going.":"Pick where you are, then where you're going."}</p>`;
+    if(sel.length){
+      const n=document.createElement("p"),{full}=reach(P[sel[0]]),f=v=>Math.round(v).toLocaleString("en-GB");
+      const lo=Math.min(...full),hi=Math.max(...full);
+      n.textContent=`Shaded: how far you get from ${P[sel[0]].name} in one day's daylight (${hi-lo<20?"about "+f(hi):f(lo)+"–"+f(hi)} blocks, depending on direction). Dashed: out and back before dark.`;
+      R.append(n);
+    }
+    R.append(paceSelect());
+    return;
+  }
+  const a=P[sel[0]],b=P[sel[1]],dx=b.x-a.x,dz=b.z-a.z,d=Math.round(Math.hypot(dx,dz));
+  // daylight check: walking minutes vs one day, keeping SPARE minutes to build a shelter
+  const tr=travel(a,b),mins=tr.secs/60,fmt=m=>m<1?"under 1 min":`${Math.round(m)} min`;
+  // biggest stretches of terrain along the line, e.g. "jungle 420 · forest 310"
+  const terrain=Object.entries(tr.by).sort((p,q)=>q[1]-p[1]).filter(([,v])=>v>=STEP).slice(0,4)
+    .map(([k,v])=>`${k.replace(/_/g," ")} ${Math.round(v).toLocaleString("en-GB")}`).join(" · ");
+  let verdict,cls;
+  if(mins<=DAYLIGHT-SPARE){verdict=`Fits in one day · ${fmt(DAYLIGHT-mins)} spare`;cls="ok"}
+  else if(mins<=DAYLIGHT){verdict="Tight · little time left to build a shelter";cls="warn"}
+  else{
+    const days=Math.ceil(mins/(DAYLIGHT-SPARE));
+    verdict=`Too far for one day · plan ${days} days, a shelter every ~${Math.round(d/days).toLocaleString("en-GB")} blocks`;cls="bad";
+  }
+  R.innerHTML=`<h2>ROUTE</h2><p></p><dl class="stats">
+   <dt>Distance</dt><dd class="big">${d.toLocaleString("en-GB")} blocks</dd>
+   <dt>Heading</dt><dd>${dirName(dx,dz)} · face ${yaw(dx,dz)}°</dd>
+   <dt>Go</dt><dd>${Math.abs(dx)} ${dx>=0?"east (+X)":"west (−X)"}, ${Math.abs(dz)} ${dz>=0?"south (+Z)":"north (−Z)"}</dd>
+   ${pace==="auto"?`<dt>Terrain</dt><dd>${terrain}</dd>`:""}
+   <dt>Travel</dt><dd>${fmt(mins)} of ${DAYLIGHT} min daylight</dd>
+   <dt>Daylight</dt><dd class="verdict ${cls}">${verdict}</dd>
+   <dt>Via Nether</dt><dd>${Math.round(d/8).toLocaleString("en-GB")} blocks</dd></dl>`;
+  R.querySelector("p").textContent=`${a.name} → ${b.name}`;
+  R.append(paceSelect());
+}
+function biomeLegend(){
+  const L=document.getElementById("biomeLegend");L.innerHTML="";
+  [...new Set(places().map(p=>p.biome).filter(Boolean))].sort().forEach(b=>{
+    const s=document.createElement("span"),i=document.createElement("i");
+    i.className="dot";i.style.background=biomeCol(b);
+    s.append(i,b.replace(/_/g," "));L.append(s);
+  });
+}
+function render(){draw();list();route();biomeLegend()}
+const biomeSel=document.getElementById("newBiome");
+Object.keys(BIOMES).sort().forEach(b=>biomeSel.add(new Option(b.replace(/_/g," "),b)));
+document.getElementById("addForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  const n=document.getElementById("newName").value.trim(),x=+document.getElementById("newX").value,z=+document.getElementById("newZ").value;
+  if(!n||isNaN(x)||isNaN(z))return;
+  const p={name:n,x,z};
+  if(biomeSel.value)p.biome=biomeSel.value;
+  if(document.getElementById("newVillage").checked)p.village=true;
+  if(document.getElementById("newPortal").checked)p.portal=true;
+  extra.push(p);
+  try{localStorage.setItem("mcExtra",JSON.stringify(extra))}catch(err){}
+  e.target.reset();render();
+});
+document.getElementById("copyBtn").addEventListener("click",()=>{
+  const txt=extra.map(p=>`  {name:${JSON.stringify(p.name)}, x:${p.x}, z:${p.z}${p.village?", village:true":""}${p.portal?", portal:true":""}${p.biome?`, biome:${JSON.stringify(p.biome)}`:""}},`).join("\n")||"// No new places added yet";
+  const out=document.getElementById("codeOut");out.textContent=txt;out.hidden=false;
+  try{navigator.clipboard.writeText(txt).catch(()=>{})}catch(e){}
+});
+const mapsToggle=document.getElementById("mapsToggle");
+mapsToggle.checked=showMaps;
+mapsToggle.addEventListener("change",()=>{
+  showMaps=mapsToggle.checked;
+  try{localStorage.setItem("mcMaps",showMaps?"on":"off")}catch(e){}
+  draw();
+});
+/* ---- zoom and pan ---- */
+const svgPt=e=>{const r=svg.getBoundingClientRect();return [(e.clientX-r.left)*600/r.width,(e.clientY-r.top)*600/r.height]};
+// zoom by factor f, keeping the map point under (ux,uy) where it is
+function zoomAt(f,ux=300,uy=300){
+  const k=Math.min(200,Math.max(1,view.k*f));
+  if(k===1){view={k:1,cx:null,cz:null};return draw()}
+  const wx=T.x0+ux/T.S,wz=T.z0+uy/T.S,span=T.span*view.k/k;
+  view={k,cx:wx+(300-ux)*span/600,cz:wz+(300-uy)*span/600};
+  draw();
+}
+function panBy(dx,dz){
+  if(view.k===1)return;
+  view.cx=T.x0+T.span/2-dx/T.S;view.cz=T.z0+T.span/2-dz/T.S;
+  draw();
+}
+svg.addEventListener("wheel",e=>{e.preventDefault();zoomAt(Math.exp(-e.deltaY*.0015),...svgPt(e))},{passive:false});
+const ptrs=new Map();let dragged=false;
+svg.addEventListener("pointerdown",e=>{ptrs.set(e.pointerId,svgPt(e));if(ptrs.size===1)dragged=false});
+svg.addEventListener("pointermove",e=>{
+  if(!ptrs.has(e.pointerId))return;
+  const was=ptrs.get(e.pointerId),now=svgPt(e);
+  if(ptrs.size===1){
+    if(!dragged&&Math.hypot(now[0]-was[0],now[1]-was[1])<5)return; // still a tap
+    if(!dragged){dragged=true;svg.setPointerCapture(e.pointerId);svg.style.cursor="grabbing"}
+    ptrs.set(e.pointerId,now);panBy(now[0]-was[0],now[1]-was[1]);
+  }else if(ptrs.size===2){
+    // pinch: zoom by the change in finger spacing, around the midpoint
+    const other=[...ptrs].find(([id])=>id!==e.pointerId)[1];
+    const d0=Math.hypot(was[0]-other[0],was[1]-other[1]),d1=Math.hypot(now[0]-other[0],now[1]-other[1]);
+    dragged=true;ptrs.set(e.pointerId,now);
+    if(d0>0){zoomAt(d1/d0,(now[0]+other[0])/2,(now[1]+other[1])/2)}
+  }
+});
+const lift=e=>{ptrs.delete(e.pointerId);svg.style.cursor=""};
+svg.addEventListener("pointerup",lift);svg.addEventListener("pointercancel",lift);
+// a drag or pinch must not also count as tapping a place
+svg.addEventListener("click",e=>{if(dragged){e.stopPropagation();dragged=false}},true);
+document.getElementById("zoomIn").onclick=()=>zoomAt(1.6);
+document.getElementById("zoomOut").onclick=()=>zoomAt(1/1.6);
+document.getElementById("zoomFit").onclick=()=>{view={k:1,cx:null,cz:null};draw()};
+sel=[1,0];render();
+loadTerrain();
+</script>
