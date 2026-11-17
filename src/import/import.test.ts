@@ -32,6 +32,24 @@ describe("detectCrop", () => {
     expect(detectCrop(decode(file))?.crop).toEqual(m?.crop ?? SWITCH_CROP);
   });
 
+  // Other devices and Java Edition hold the map elsewhere and at other sizes: move and shrink our
+  // screenshots and check the search finds the map again, to within about one map pixel.
+  it.each([
+    ["2026110415391900", 1.0, 40, 30], ["2026110415391900", 0.9, 30, 25],
+    ["2026111217323500", 0.85, -60, 10], ["2026101419105900", 1.0, -50, 20],
+  ] as const)("finds the map in %s moved and scaled (%f, %i, %i)", (prefix, k, dx, dy) => {
+    const file = Object.keys(fixtures).find((f) => f.startsWith(prefix))!, src = decode(file);
+    const W = 1280, H = 720, data = new Uint8Array(W * H * 4).fill(70);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const sx = Math.floor((x - dx) / k), sy = Math.floor((y - dy) / k);
+      if (sx >= 0 && sy >= 0 && sx < W && sy < H) data.set(src.data.subarray((sy * W + sx) * 4, (sy * W + sx) * 4 + 4), (y * W + x) * 4);
+    }
+    const got = detectCrop({ width: W, height: H, data })!.crop;
+    expect(Math.abs(got.x - (SWITCH_CROP.x * k + dx))).toBeLessThanOrEqual(8);
+    expect(Math.abs(got.y - (SWITCH_CROP.y * k + dy))).toBeLessThanOrEqual(8);
+    expect(Math.abs(got.size - SWITCH_CROP.size * k)).toBeLessThanOrEqual(10);
+  });
+
   it("finds no map in a screenshot without one", () => {
     const img = decode(Object.keys(fixtures)[0]);
     // paint over the whole picture with grass: no parchment frame anywhere

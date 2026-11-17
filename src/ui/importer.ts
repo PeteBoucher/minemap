@@ -95,13 +95,14 @@ function step(dlg: HTMLDialogElement, s: StepInput): Promise<"added" | "skipped"
       const c = corner();
       covers.textContent = c ? `Map covers X ${nf(c.x)} to ${nf(c.x + c.size)}, Z ${nf(c.z)} to ${nf(c.z + c.size)}` : "";
       add.disabled = !c && !(savePlace.checked && pos && placeName.value.trim());
-      add.textContent = c ? "Add map" : "Save place";
+      add.textContent = c || crop ? "Add map" : "Save place";
+      add.hidden = !crop && !pos; // nothing this screenshot can add
       placeName.disabled = !savePlace.checked;
     }
 
     if (s.error) status.textContent = s.error;
     else if (!crop) status.textContent = "This doesn't look like a screenshot of a map held in your hand." + (pos ? " You can still save where you were standing." : "");
-    else if (!pos) status.textContent = "Couldn't read your coordinates. Turn on “Show coordinates” in your world settings next time, or type any spot that's on this map.";
+    else if (!pos) status.textContent = "Found the map, but no coordinates on screen. Type any spot that's on this map. (In Bedrock Edition, turn on “Show coordinates” in your world settings and Minemap will read them for you.)";
     else if (placement?.basis === "marker") status.textContent = `Read your position (${nf(pos.x)}, ${nf(pos.z)}) and found your marker on the map, so it's placed exactly and the zoom level is set for you.`;
     else status.textContent = `Read your position (${nf(pos.x)}, ${nf(pos.z)}). Placed assuming you were standing on this map — check the zoom level. If the map shows somewhere else, type a spot that's on it.`;
 
