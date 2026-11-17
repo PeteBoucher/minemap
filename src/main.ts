@@ -1,5 +1,6 @@
 import "./styles.css";
 import { BIOMES } from "./core/biomes";
+import { FREE, freeLeft } from "./core/license";
 import { type Pace, type TravelCtx, reach } from "./core/travel";
 import {
   type MapShot, type Place, type PlaceKind, type World,
@@ -9,6 +10,8 @@ import {
 import { DEMO_ID, buildDemo } from "./store/demo";
 import { exportWorld, importWorld, migrate } from "./store/migrate";
 import { importScreenshots } from "./ui/importer";
+import { handlePaymentReturn, requireUnlock } from "./ui/paywall";
+import { isUnlocked } from "./store/unlock";
 import { MapView } from "./ui/map";
 import { renderBiomeLegend, renderList, renderRoute } from "./ui/panels";
 import { terrainFor } from "./ui/terrain";
@@ -89,6 +92,14 @@ function renderMapsList(): void {
 /* ---------- map screenshots ---------- */
 async function addShots(files: File[]): Promise<void> {
   if (!world || !files.length) return;
+  if (!isDemo()) {
+    const left = freeLeft("maps", maps.length);
+    if (files.length > left && !(await requireUnlock("maps"))) {
+      files = files.slice(0, left);
+      if (!files.length) return;
+    }
+    void refreshUnlockItem();
+  }
   const w = world;
   const added = await importScreenshots(files, {
     lastScale: () => world?.settings.lastScale ?? 0,
@@ -208,6 +219,8 @@ async function updateSettings(patch: Partial<World["settings"]>): Promise<void> 
 const setPace = (pace: Pace) => updateSettings({ pace });
 
 async function startNewWorld(): Promise<void> {
+  if ((await listWorlds()).length >= FREE.worlds && !(await requireUnlock("worlds"))) return;
+  void refreshUnlockItem();
   const name = prompt("Name your world", (await listWorlds()).length ? "New world" : "My world")?.trim();
   if (!name) return;
   const w = await createWorld(name);
@@ -221,7 +234,11 @@ async function worldAction(act: string): Promise<void> {
   ($("worldMenu") as HTMLDetailsElement).open = false;
   if (act === "new") return startNewWorld();
   if (act === "demo") return startDemo();
-  if (act === "import") return $("importFile").click();
+  if (act === "unlock") { await requireUnlock("worlds"); return refreshUnlockItem(); }
+  if (act === "import") {
+    if (!(await requireUnlock("backup"))) return;
+    return $("importFile").click();
+  }
   if (!world || isDemo()) return;
   if (act === "rename") {
     const name = prompt("Rename world", world.name)?.trim();
@@ -230,6 +247,7 @@ async function worldAction(act: string): Promise<void> {
     await saveWorld(world);
     await refreshWorldSelect();
   } else if (act === "export") {
+    if (!(await requireUnlock("backup"))) return refreshUnlockItem();
     const data = await exportWorld(world);
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: "application/json" }));
@@ -242,6 +260,15 @@ async function worldAction(act: string): Promise<void> {
     world = null;
     await openWorld(undefined);
   }
+}
+
+/** The ••• menu shows whether this device is unlocked. */
+async function refreshUnlockItem(): Promise<void> {
+  const item = document.querySelector<HTMLButtonElement>("#worldMenu [data-act=unlock]");
+  if (!item) return;
+  const ok = await isUnlocked();
+  item.textContent = ok ? "Unlocked ✓" : "Unlock everything ($5)…";
+  item.disabled = ok;
 }
 
 /* ---------- place form ---------- */
@@ -282,6 +309,7 @@ form.addEventListener("submit", async (e) => {
   if (!world) return;
   const name = f.name.value.trim(), x = Math.round(+f.x.value), z = Math.round(+f.z.value);
   if (!name || !Number.isFinite(x) || !Number.isFinite(z)) return;
+  if (!editing && !isDemo() && places.length >= FREE.places && !(await requireUnlock("places"))) return;
   const kind = (form.querySelector<HTMLInputElement>("input[name=kind]:checked")?.value ?? "place") as PlaceKind;
   const p: Place = { ...(editing ?? {}), id: editing?.id ?? newId(), worldId: world.id, name, x, z, kind };
   if (f.biome.value) p.biome = f.biome.value; else delete p.biome;
@@ -347,4 +375,6 @@ document.addEventListener("click", (e) => {
     return;
   }
   await openWorld(await getCurrentWorldId());
+  await handlePaymentReturn();
+  void refreshUnlockItem();
 })();

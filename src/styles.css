@@ -110,9 +110,9 @@ input,select{font:inherit;font-size:.9rem;padding:6px 8px;border:1px solid var(-
 .maprow .act{border:1px solid var(--line);border-radius:4px;padding:2px 8px}
 
 /* import dialog */
-dialog#importDlg{width:min(680px,calc(100vw - 32px));max-height:calc(100dvh - 32px);padding:18px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)}
-dialog#importDlg::backdrop{background:rgb(0 0 0 / .45)}
-dialog#importDlg h2{margin-bottom:2px}
+dialog{width:min(680px,calc(100vw - 32px));max-height:calc(100dvh - 32px);padding:18px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)}
+dialog::backdrop{background:rgb(0 0 0 / .45)}
+dialog h2{margin-bottom:2px}
 .fname{margin:0 0 12px;color:var(--muted);font-family:var(--mono);font-size:.8rem;overflow-wrap:anywhere}
 .imp{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:start}
 @media (max-width:560px){.imp{grid-template-columns:1fr}}
@@ -125,3 +125,14 @@ dialog#importDlg h2{margin-bottom:2px}
 .check input[type=text],.check input:not([type]){flex:1;min-width:120px}
 dialog menu{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin:18px 0 0;padding:0}
 .btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* unlock dialog */
+#unlockDlg{width:min(460px,calc(100vw - 32px))}
+.perks{margin:0 0 12px;padding-left:18px;color:var(--muted)}
+.perks li{margin:3px 0}
+a.btn{display:inline-block;text-decoration:none}
+a.btn[aria-disabled=true]{opacity:.45;cursor:not-allowed}
+.already{margin-top:14px;color:var(--muted)}
+.already summary{cursor:pointer}
+.restore{display:flex;gap:6px;margin-top:8px}
+.restore input{flex:1}
