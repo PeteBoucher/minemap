@@ -15,13 +15,8 @@ export default defineConfig({
         display: "standalone",
         start_url: "/",
         icons: [{ src: "favicon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" }],
-        // Android: lets people share Switch screenshots straight into the app (handled in step 5)
-        share_target: {
-          action: "/share",
-          method: "POST",
-          enctype: "multipart/form-data",
-          params: { files: [{ name: "screens", accept: ["image/*"] }] },
-        },
+        // TODO: Android share target (share Switch screenshots straight into the app). Needs a custom
+        // service worker (injectManifest) to receive the POSTed files, so it's left out until then.
       },
     }),
   ],

@@ -13,7 +13,13 @@ import type { Pace } from "../core/travel";
 export type PlaceKind = "place" | "portal" | "village";
 export type Platform = "switch" | "other";
 
-export interface WorldSettings { pace: Pace; showMaps: boolean; platform: Platform }
+export interface WorldSettings {
+  pace: Pace;
+  showMaps: boolean;
+  platform: Platform;
+  /** Zoom level last chosen when importing a map screenshot (0–4). */
+  lastScale?: number;
+}
 export interface World { id: string; name: string; createdAt: number; settings: WorldSettings }
 export interface Place { id: string; worldId: string; name: string; x: number; z: number; kind: PlaceKind; biome?: string; note?: string }
 export interface MapShot { id: string; worldId: string; x: number; z: number; size: number; crop?: Crop; imageId: string; capturedAt?: number }

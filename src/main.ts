@@ -3,11 +3,12 @@ import { BIOMES } from "./core/biomes";
 import { type Pace, type TravelCtx, reach } from "./core/travel";
 import {
   type MapShot, type Place, type PlaceKind, type World,
-  createWorld, deletePlace, deleteWorld, getCurrentWorldId, getImage, getWorld, listMaps, listPlaces, listWorlds,
-  newId, requestPersistence, savePlace, saveWorld, setCurrentWorldId,
+  createWorld, deleteMap, deletePlace, deleteWorld, getCurrentWorldId, getImage, getWorld, listMaps, listPlaces, listWorlds,
+  newId, requestPersistence, saveMap, savePlace, saveWorld, setCurrentWorldId,
 } from "./store/db";
 import { DEMO_ID, buildDemo } from "./store/demo";
 import { exportWorld, importWorld, migrate } from "./store/migrate";
+import { importScreenshots } from "./ui/importer";
 import { MapView } from "./ui/map";
 import { renderBiomeLegend, renderList, renderRoute } from "./ui/panels";
 import { terrainFor } from "./ui/terrain";
@@ -59,6 +60,72 @@ function render(): void {
     terrainNote: world.settings.pace === "auto" && terrainLoading ? "Reading terrain from your map screenshots…" : null,
   });
   renderBiomeLegend($("biomeLegend"), places);
+  renderMapsList();
+}
+
+function renderMapsList(): void {
+  $("mapsList").hidden = maps.length === 0;
+  $("mapsSummary").textContent = `${maps.length} map screenshot${maps.length === 1 ? "" : "s"}`;
+  $("mapsRows").replaceChildren(...maps.slice().sort((a, b) => b.size - a.size || a.x - b.x || a.z - b.z).map((m) => {
+    const row = document.createElement("div");
+    row.className = "maprow";
+    const img = document.createElement("img");
+    img.alt = "";
+    img.loading = "lazy";
+    img.src = urls.get(m.imageId) ?? "";
+    const label = document.createElement("span");
+    label.textContent = `${m.size.toLocaleString("en-GB")} blocks · from ${m.x}, ${m.z}`;
+    const rm = document.createElement("button");
+    rm.type = "button";
+    rm.className = "act rm";
+    rm.textContent = "Remove";
+    rm.setAttribute("aria-label", `Remove the map from ${m.x}, ${m.z}`);
+    rm.onclick = () => removeMap(m);
+    row.append(img, label, rm);
+    return row;
+  }));
+}
+
+/* ---------- map screenshots ---------- */
+async function addShots(files: File[]): Promise<void> {
+  if (!world || !files.length) return;
+  const w = world;
+  const added = await importScreenshots(files, {
+    lastScale: () => world?.settings.lastScale ?? 0,
+    setLastScale: (s) => { if (world?.settings.lastScale !== s) void updateSettings({ lastScale: s }); },
+    addMap: async (m, image) => {
+      const shot: MapShot = { id: newId(), worldId: w.id, imageId: newId(), capturedAt: Date.now(), ...m };
+      if (w.id !== DEMO_ID) {
+        await saveMap(shot, image);
+        void requestPersistence();
+      }
+      maps = [...maps, shot];
+      urls.set(shot.imageId, URL.createObjectURL(image));
+    },
+    addPlace: async ({ name, x, z }) => {
+      const p: Place = { id: newId(), worldId: w.id, name, x, z, kind: "place" };
+      if (w.id !== DEMO_ID) await savePlace(p);
+      places = [...places, p];
+    },
+  });
+  if (world?.id !== w.id) return;
+  if (added) {
+    if (!world.settings.showMaps) await updateSettings({ showMaps: true });
+    mapView.fit();
+    void loadTerrain();
+  }
+  render();
+}
+
+async function removeMap(m: MapShot): Promise<void> {
+  if (!world || !confirm("Remove this map screenshot?")) return;
+  if (!isDemo()) await deleteMap(world.id, m.id);
+  maps = maps.filter((x) => x.id !== m.id);
+  const u = urls.get(m.imageId);
+  if (u?.startsWith("blob:")) URL.revokeObjectURL(u);
+  urls.delete(m.imageId);
+  void loadTerrain();
+  render();
 }
 
 function pick(id: string): void {
@@ -114,7 +181,11 @@ async function openWorld(id: string | undefined): Promise<void> {
 }
 
 async function loadTerrain(): Promise<void> {
-  if (!maps.length) return;
+  if (!maps.length) {
+    terrainAt = undefined;
+    terrainVer++;
+    return;
+  }
   const forWorld = world?.id;
   terrainLoading = true;
   render();
@@ -240,7 +311,13 @@ async function removePlace(p: Place): Promise<void> {
 $("zoomIn").onclick = () => mapView.zoomBy(1.6);
 $("zoomOut").onclick = () => mapView.zoomBy(1 / 1.6);
 $("zoomFit").onclick = () => mapView.fit();
-$("mapsToggle").onchange = (e) => updateSettings({ showMaps: (e.target as HTMLInputElement).checked });
+$("addShots").onclick = () => $("shotFiles").click();
+$("shotFiles").onchange = (e) => {
+  const input = e.target as HTMLInputElement, files = [...(input.files ?? [])];
+  input.value = "";
+  void addShots(files);
+};
+$("mapsToggle").onchange =(e) => updateSettings({ showMaps: (e.target as HTMLInputElement).checked });
 $("worldSel").onchange = (e) => openWorld((e.target as HTMLSelectElement).value);
 $("startNew").onclick = startNewWorld;
 $("startDemo").onclick = startDemo;

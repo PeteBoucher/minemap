@@ -84,12 +84,12 @@ svg#map text{font-family:var(--mono);fill:var(--muted)}
 .pace select{flex:1}
 
 /* add / edit form */
-form{display:grid;grid-template-columns:1fr 70px 70px auto;gap:6px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
-form h2{grid-column:1/-1;margin:0 0 2px}
-@media (max-width:420px){form{grid-template-columns:1fr 1fr}}
-form .opts{grid-column:2/-1;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:.88rem;color:var(--muted)}
-form .opts label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
-@media (max-width:420px){form #newBiome,form .opts{grid-column:1/-1}}
+#placeForm{display:grid;grid-template-columns:1fr 70px 70px auto;gap:6px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+#placeForm h2{grid-column:1/-1;margin:0 0 2px}
+@media (max-width:420px){#placeForm{grid-template-columns:1fr 1fr}}
+#placeForm .opts{grid-column:2/-1;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:.88rem;color:var(--muted)}
+#placeForm .opts label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+@media (max-width:420px){#placeForm #newBiome,#placeForm .opts{grid-column:1/-1}}
 input,select{font:inherit;font-size:.9rem;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);min-width:0}
 .btn{font:inherit;font-size:.9rem;padding:6px 12px;border:0;border-radius:4px;background:var(--accent);color:var(--panel);cursor:pointer;font-weight:600}
 .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);font-weight:400}
@@ -100,3 +100,28 @@ input,select{font:inherit;font-size:.9rem;padding:6px 8px;border:1px solid var(-
 .note{font-size:.82rem;color:var(--muted);margin-top:10px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .demo-note{display:inline-block;margin:-10px 0 16px;padding:4px 10px;border:1px dashed var(--accent2);border-radius:4px;color:var(--accent2);font-size:.88rem}
+
+/* map screenshots */
+.maps{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px 12px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.maps details{flex:1;min-width:200px}
+.maps summary{cursor:pointer;color:var(--muted);padding:6px 0}
+.maprow{display:grid;grid-template-columns:48px 1fr auto;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--line);font-family:var(--mono);font-size:.82rem;color:var(--muted)}
+.maprow img{width:48px;height:48px;object-fit:cover;border-radius:3px;image-rendering:pixelated}
+.maprow .act{border:1px solid var(--line);border-radius:4px;padding:2px 8px}
+
+/* import dialog */
+dialog#importDlg{width:min(680px,calc(100vw - 32px));max-height:calc(100dvh - 32px);padding:18px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)}
+dialog#importDlg::backdrop{background:rgb(0 0 0 / .45)}
+dialog#importDlg h2{margin-bottom:2px}
+.fname{margin:0 0 12px;color:var(--muted);font-family:var(--mono);font-size:.8rem;overflow-wrap:anywhere}
+.imp{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:start}
+@media (max-width:560px){.imp{grid-template-columns:1fr}}
+.thumb{display:block;width:100%;max-width:256px;height:auto;border-radius:4px;image-rendering:pixelated;background:var(--land)}
+.status{margin:0 0 12px}
+.fields{display:flex;flex-direction:column;gap:10px}
+.fields label,.spot{display:flex;flex-wrap:wrap;align-items:center;gap:6px;color:var(--muted)}
+.spot input{width:90px}
+.covers{margin:0;font-family:var(--mono);font-size:.85rem;color:var(--accent)}
+.check input[type=text],.check input:not([type]){flex:1;min-width:120px}
+dialog menu{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin:18px 0 0;padding:0}
+.btn:disabled{opacity:.45;cursor:not-allowed}

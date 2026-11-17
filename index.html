@@ -66,6 +66,15 @@
             <label id="mapsToggleWrap"><input type="checkbox" id="mapsToggle" /> Game maps</label>
           </div>
           <div class="legend" id="biomeLegend"></div>
+          <div class="maps">
+            <button class="btn" type="button" id="addShots">+ Add map screenshots</button>
+            <input type="file" id="shotFiles" accept="image/*" multiple hidden />
+            <details id="mapsList" hidden>
+              <summary id="mapsSummary"></summary>
+              <div id="mapsRows"></div>
+            </details>
+          </div>
+          <p class="note">Hold a map in game with “Show coordinates” on and take a screenshot. Minemap reads where you were and lines the map up for you.</p>
         </div>
         <div class="panel">
           <h2>PLACES</h2>
@@ -89,6 +98,7 @@
         </div>
       </div>
     </div>
+    <dialog id="importDlg" aria-label="Add a map screenshot"></dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
