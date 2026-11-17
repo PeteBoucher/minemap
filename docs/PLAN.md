@@ -51,7 +51,7 @@ minemap/
   functions/api/
     unlock.ts               Cloudflare Pages Function: check the Stripe session, return a signed licence
   public/                   icons, manifest assets
-  test/fixtures/            the prototype's 22 screenshots with their known {x, z, size}
+  public/demo/              the demo world's screenshots (also the test fixtures for import), known {x, z, size} in store/demoWorld.ts
 ```
 
 ## What to reuse from the prototype
