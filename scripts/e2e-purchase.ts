@@ -1,13 +1,19 @@
-// End-to-end test of a test-mode purchase: pay through the real Payment Link, land back on the app,
-// get a licence, then check the purchase in Stripe and the audit event in PostHog.
+// End-to-end test of a test-mode purchase against a Vercel Preview deployment: pay through the real
+// sandbox Payment Link, land back on the Preview, get a licence, then check the purchase in Stripe and
+// the audit event in PostHog.
 //
-// Usage:  npx tsx --env-file=.env.local scripts/e2e-purchase.ts   (or: npm run e2e:purchase)
+// Usage:  E2E_BASE_URL=https://<preview>.vercel.app npm run e2e:purchase
+//
+// The sandbox Payment Link redirects to minemap.me, which runs on live keys and can't see sandbox
+// sessions. Inside this script's browser only, that redirect is rerouted to E2E_BASE_URL.
 //
 // Needs (in .env.local or the environment):
+//   E2E_BASE_URL              the Preview deployment (production minemap.me is refused)
 //   STRIPE_SECRET_KEY         sk_test_… or rk_test_… (live keys are refused)
-//   STRIPE_PAYMENT_LINK_ID    plink_… of the test Payment Link
+//   STRIPE_PAYMENT_LINK_ID    plink_… of the sandbox Payment Link
 // Optional:
-//   E2E_BASE_URL              app to land on (default https://minemap.me)
+//   VERCEL_AUTOMATION_BYPASS_SECRET  Vercel "Protection Bypass for Automation" secret, if previews
+//                                    are protected (sent only to E2E_BASE_URL, never to Stripe)
 //   POSTHOG_PERSONAL_API_KEY  phx_… with query:read, to check the audit event (skipped without it)
 //   POSTHOG_PROJECT_ID        default 139417
 //   POSTHOG_API_HOST          default https://eu.posthog.com
@@ -17,7 +23,10 @@ import { join } from "node:path";
 import { chromium, type Page } from "playwright";
 
 const env = process.env;
-const BASE_URL = (env.E2E_BASE_URL || "https://minemap.me").replace(/\/+$/, "");
+const BASE_URL = (env.E2E_BASE_URL ?? "").replace(/\/+$/, "");
+const BYPASS = env.VERCEL_AUTOMATION_BYPASS_SECRET ?? "";
+/** Where the sandbox Payment Link sends buyers; rerouted to BASE_URL in this browser. */
+const LINK_REDIRECT_ORIGIN = "https://minemap.me";
 const STRIPE_KEY = env.STRIPE_SECRET_KEY ?? "";
 const LINK_ID = env.STRIPE_PAYMENT_LINK_ID ?? "";
 const PH_KEY = env.POSTHOG_PERSONAL_API_KEY ?? "";
@@ -104,20 +113,34 @@ async function waitFor<T>(what: string, fn: () => Promise<T | null | undefined>,
   }
 }
 
-async function auditEvent(sessionId: string): Promise<{ result: string } | null> {
+async function auditEvent(sessionId: string): Promise<{ result: string; deploy_env: string } | null> {
   const r = await fetch(`${PH_HOST}/api/projects/${PH_PROJECT}/query/`, {
     method: "POST",
     headers: { authorization: `Bearer ${PH_KEY}`, "content-type": "application/json" },
     body: JSON.stringify({ query: { kind: "HogQLQuery", query:
-      `SELECT properties.result FROM events WHERE event = 'license_unlock' AND timestamp >= now() - INTERVAL 1 HOUR
+      `SELECT properties.result, properties.deploy_env FROM events WHERE event = 'license_unlock' AND timestamp >= now() - INTERVAL 1 HOUR
        AND properties.session_id = '${sessionId.replace(/[^A-Za-z0-9_]/g, "")}' ORDER BY timestamp DESC LIMIT 1` } }),
   });
   if (!r.ok) throw new Error(`PostHog query: ${r.status} ${await r.text()}`);
   const rows = ((await r.json()) as { results: string[][] }).results;
-  return rows.length ? { result: rows[0][0] } : null;
+  return rows.length ? { result: rows[0][0], deploy_env: rows[0][1] } : null;
+}
+
+/** Sends Stripe's redirect to the Preview, and the bypass secret only to the Preview. */
+async function routeToPreview(page: Page) {
+  await page.route(`${LINK_REDIRECT_ORIGIN}/**`, (route) => {
+    const u = new URL(route.request().url());
+    return route.fulfill({ status: 302, headers: { location: `${BASE_URL}${u.pathname}${u.search}` } });
+  });
+  if (BYPASS) {
+    await page.route(`${BASE_URL}/**`, (route) =>
+      route.continue({ headers: { ...route.request().headers(), "x-vercel-protection-bypass": BYPASS } }));
+  }
 }
 
 async function main() {
+  if (!/^https:\/\//.test(BASE_URL)) throw new Error("Set E2E_BASE_URL to the Preview deployment, e.g. https://minemap-git-<branch>-<team>.vercel.app");
+  if (/^https:\/\/(www\.)?minemap\.me$/.test(BASE_URL)) throw new Error("minemap.me runs on live keys and can't see sandbox sessions. Point E2E_BASE_URL at a Preview deployment.");
   if (!/^(sk|rk)_test_/.test(STRIPE_KEY)) throw new Error("STRIPE_SECRET_KEY must be a test-mode key (sk_test_… or rk_test_…). This script never runs against live mode.");
   if (!LINK_ID.startsWith("plink_")) throw new Error("Set STRIPE_PAYMENT_LINK_ID to the test Payment Link (plink_…).");
 
@@ -126,11 +149,15 @@ async function main() {
   check(!link.livemode && link.active, "test-mode link is active", link.url);
   if (link.livemode) throw new Error("Refusing to buy through a live Payment Link.");
 
-  console.log(`Checkout as ${BUYER.email} (${BUYER.city}, ${BUYER.country})`);
+  console.log(`Checkout as ${BUYER.email} (${BUYER.city}, ${BUYER.country}), landing on ${BASE_URL}`);
   const browser = await chromium.launch({ headless: !env.E2E_HEADED, channel: "chromium" });
   let sessionId = "";
   const page = await browser.newPage({ viewport: { width: 1200, height: 1400 } });
   try {
+    await routeToPreview(page);
+    const probe = await page.request.get(`${BASE_URL}/`, { headers: BYPASS ? { "x-vercel-protection-bypass": BYPASS } : {}, maxRedirects: 0 });
+    if (probe.status() === 401 || probe.status() === 403 || probe.status() === 307)
+      throw new Error(`Preview answered HTTP ${probe.status()}: it's protected. Set VERCEL_AUTOMATION_BYPASS_SECRET.`);
     await payOnCheckout(page, link.url);
     // The app strips ?session_id= from the address bar straight away, so watch its call to the API instead.
     const unlock = await page.waitForResponse((r) => r.url().startsWith(`${BASE_URL}/api/unlock?`), { timeout: 90_000 });
@@ -168,6 +195,7 @@ async function main() {
     // Ingestion takes a minute or two before events are queryable.
     const ev = await waitFor("the license_unlock event", () => auditEvent(sessionId), 180_000, 10_000).catch(() => null);
     check(ev?.result === "issued", "license_unlock event recorded as issued", ev ? ev.result : "not found after 3 minutes");
+    if (ev) check(ev.deploy_env === "preview", "event tagged as a preview deployment", `deploy_env ${ev.deploy_env}`);
   }
 }
 

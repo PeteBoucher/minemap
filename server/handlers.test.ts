@@ -89,7 +89,7 @@ describe("POST /api/restore", () => {
 });
 
 describe("audit trail", () => {
-  const audited = { POSTHOG_KEY: "phc_test", POSTHOG_HOST: "https://ph.test/" };
+  const audited = { POSTHOG_KEY: "phc_test", POSTHOG_HOST: "https://ph.test/", VERCEL_ENV: "preview" };
   /** Stripe routes plus a PostHog capture endpoint; returns the captured events. */
   function withPostHog(routes: Record<string, unknown>, posthogUp = true) {
     const events: Record<string, any>[] = [];
@@ -108,7 +108,7 @@ describe("audit trail", () => {
     const ok = withPostHog({ "checkout/sessions/": session() });
     await unlock("cs_test_abcdefghijkl", ok.fetchFn, { ...env, ...audited });
     expect(ok.events[0]).toMatchObject({ api_key: "phc_test", event: "license_unlock", distinct_id: "cs_test_abcdefghijkl",
-      properties: { result: "issued", session_id: "cs_test_abcdefghijkl", livemode: false, $process_person_profile: false } });
+      properties: { result: "issued", session_id: "cs_test_abcdefghijkl", livemode: false, deploy_env: "preview", $process_person_profile: false } });
 
     const unpaid = withPostHog({ "checkout/sessions/": session({ payment_status: "unpaid" }) });
     await unlock("cs_test_abcdefghijkl", unpaid.fetchFn, { ...env, ...audited });

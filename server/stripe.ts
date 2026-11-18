@@ -47,5 +47,6 @@ export function envFromProcess(): Env {
     STRIPE_PAYMENT_LINK_ID: e.STRIPE_PAYMENT_LINK_ID || undefined,
     POSTHOG_KEY: e.POSTHOG_KEY || undefined,
     POSTHOG_HOST: e.POSTHOG_HOST || undefined,
+    VERCEL_ENV: e.VERCEL_ENV || undefined,
   };
 }
