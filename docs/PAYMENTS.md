@@ -25,6 +25,8 @@ Minemap went live on 18 November 2026.
 | Product | Minemap unlock, `txcd_10103001`, $5 tax-inclusive | same, created by hand |
 | Used by | Vercel *Preview*, `.env.local`, the e2e test | Vercel *Production* |
 
+Audit events carry `deploy_env` (`production` or `preview`), so sandbox runs on Previews never mix with real sales.
+
 - **Domain:** `minemap.me` is the main address. `www.minemap.me` redirects to it with a 301 that keeps `?session_id=`.
 - **Audit trail:** the PostHog project "Default project" (EU, id `139417`).
 
@@ -121,7 +123,7 @@ The live checkout lets buyers choose their local currency. A Spanish buyer sees,
 
 Stripe is the record of payments, refunds and tax. With `POSTHOG_KEY` set, the endpoints also send one PostHog event per request, so you can see every licence issued or refused:
 
-- **`license_unlock`:** `result` (`issued`, `refused`, `not_found`, `bad_input`, `not_configured`), `session_id`, `livemode`.
+- **`license_unlock`:** `result` (`issued`, `refused`, `not_found`, `bad_input`, `not_configured`), `session_id`, `livemode`, `deploy_env` (`production`, `preview`; events from before 18 November 2026 don't have it).
 - **`license_restore`:** the same results plus `stripe_error`, with `email_hash` (SHA-256 of the lower-cased email, never the email itself) and, when issued, the `session_id` that was restored.
 
 The `session_id` links each event to the Checkout Session in Stripe, and `livemode` separates real sales from tests. Events are sent without person profiles. A PostHog outage never blocks an unlock: the event is just lost. Events take a minute or two to become queryable.
@@ -134,10 +136,12 @@ SELECT timestamp, event,
        properties.result AS result,
        properties.session_id AS session_id,
        properties.livemode AS livemode,
+       properties.deploy_env AS deploy_env,
        properties.email_hash AS email_hash
 FROM events
 WHERE event IN ('license_unlock', 'license_restore')
   AND timestamp >= now() - INTERVAL 90 DAY
+  AND coalesce(properties.deploy_env, 'production') != 'preview'  -- hide e2e runs on Previews
 ORDER BY timestamp DESC
 LIMIT 1000
 ```
@@ -153,6 +157,7 @@ FROM events
 WHERE event = 'license_restore'
   AND timestamp >= now() - INTERVAL 90 DAY
   AND properties.result = 'issued'
+  AND coalesce(properties.deploy_env, 'production') != 'preview'
 GROUP BY session_id
 HAVING restores_issued > 3
 ORDER BY restores_issued DESC
@@ -163,21 +168,32 @@ The second query should stay empty. If it isn't, the restore-by-email trade-off 
 
 ## End-to-end test
 
-`npm run e2e:purchase` ([scripts/e2e-purchase.ts](../scripts/e2e-purchase.ts)) checks a sandbox purchase end to end:
+```sh
+E2E_BASE_URL=https://<preview deployment> npm run e2e:purchase
+```
 
-1. **In the browser** (Playwright): it pays through the real Payment Link with a Spanish billing address and lands back on the app. It checks that `/api/unlock` returns a licence and that the app stores it.
+[scripts/e2e-purchase.ts](../scripts/e2e-purchase.ts) checks a sandbox purchase end to end, against a **Vercel Preview deployment**. minemap.me runs on live keys and can't see sandbox sessions, so the script refuses it.
+
+1. **In the browser** (Playwright): it pays through the real sandbox Payment Link with a Spanish billing address. The link redirects to `minemap.me/?session_id=…`, and inside the script's browser only, that redirect is rerouted to the Preview. It then checks that the Preview's `/api/unlock` returns a licence and that the app stores it.
 2. **In Stripe:** the session is complete and paid; the total is exactly $5.00 with IVA inside it; Managed Payments is on; it came from our link; it was billed to Spain.
-3. **In PostHog:** a `license_unlock` event with result `issued` arrives for the session. This step needs `POSTHOG_PERSONAL_API_KEY` (`phx_…` with `query:read`) and is skipped without it.
+3. **In PostHog:** a `license_unlock` event with result `issued` and `deploy_env: preview` arrives for the session. This step needs `POSTHOG_PERSONAL_API_KEY` (`phx_…` with `query:read`) and is skipped without it.
 
-It reads `.env.local` and needs `STRIPE_SECRET_KEY` (a test key) and `STRIPE_PAYMENT_LINK_ID` (the sandbox link). It refuses live keys and live links. Set `E2E_HEADED=1` to watch the browser. On a failure, it saves a screenshot and prints its path.
+**What it needs:**
+
+- **Vercel Preview environment variables:** the sandbox values for `VITE_STRIPE_PAYMENT_LINK`, `STRIPE_PAYMENT_LINK_ID` and `STRIPE_SECRET_KEY` (a test key, ideally restricted to Checkout Sessions: Read). It also needs `VITE_LICENSE_PUBLIC_JWK`, `LICENSE_PRIVATE_JWK` and `POSTHOG_KEY`, which can be the same as Production. Redeploy the Preview after setting them.
+- **In `.env.local`:**
+  - `STRIPE_SECRET_KEY`, a test key, which the script uses to check the session;
+  - `STRIPE_PAYMENT_LINK_ID`, the sandbox link;
+  - `VERCEL_AUTOMATION_BYPASS_SECRET`, from *Project → Settings → Deployment Protection → Protection Bypass for Automation*. Vercel Pro protects Previews with a login, and the script sends this secret only to the Preview, never to Stripe.
+- **A Preview URL:** any Preview deployment works. The branch URL (`minemap-git-<branch>-<team>.vercel.app`) stays the same across pushes.
+
+The script refuses live keys and live links. Set `E2E_HEADED=1` to watch the browser. On a failure, it saves a screenshot and prints its path.
 
 Things that look like bugs but aren't:
 
 - It uses Playwright's full Chromium browser (`channel: "chromium"`). With the default stripped-down headless browser, Stripe's checkout silently ignores the Pay click.
 - It waits a moment before clicking Pay, because Stripe recalculates tax after the address is entered, and a click during that is ignored. Stripe's page never goes network-idle, so the wait is a fixed pause.
 - The app removes `?session_id=` from the address bar straight away, so the script reads the session id from the app's call to `/api/unlock`.
-
-**Since go-live,** minemap.me runs on the live key and can't see sandbox sessions, so this test has to run against a Preview deployment with sandbox values (`E2E_BASE_URL=<preview url>`). That setup is tracked in [issue #1](https://github.com/PeteBoucher/minemap/issues/1).
 
 ## Troubleshooting
 

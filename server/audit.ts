@@ -8,6 +8,8 @@ export interface AuditEnv {
   POSTHOG_KEY?: string;
   /** PostHog ingestion host, e.g. https://eu.i.posthog.com */
   POSTHOG_HOST?: string;
+  /** Set by Vercel: production, preview or development. Tags events so test runs can be filtered out. */
+  VERCEL_ENV?: string;
 }
 
 export type AuditResult = "issued" | "refused" | "not_found" | "bad_input" | "stripe_error" | "not_configured";
@@ -41,6 +43,7 @@ export async function audit(env: AuditEnv, e: AuditEvent, fetchFn: typeof fetch 
         properties: {
           ...props,
           livemode: e.session_id ? e.session_id.startsWith("cs_live_") : undefined,
+          deploy_env: env.VERCEL_ENV || "unknown",
           source: "minemap-api",
           $process_person_profile: false,
           $geoip_disable: true,
