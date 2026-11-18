@@ -1,0 +1,86 @@
+# Runs the sandbox purchase test (scripts/e2e-purchase.ts) against each pull request's Vercel Preview.
+# Make "e2e purchase on Preview" a required check on main to block merging until it passes.
+#
+# Repository settings (Settings > Secrets and variables > Actions):
+#   secret   E2E_STRIPE_SECRET_KEY            rk_test_… with Checkout Sessions: Read and Payment Links: Read
+#   secret   VERCEL_AUTOMATION_BYPASS_SECRET  Vercel > Settings > Deployment Protection > Protection Bypass for Automation
+#   secret   POSTHOG_PERSONAL_API_KEY         optional: phx_… with query:read, to check the audit event
+#   variable E2E_STRIPE_PAYMENT_LINK_ID       the sandbox Payment Link (plink_…)
+#   variable VERCEL_PREVIEW_URL_SUFFIX        optional, default "-petebouchers-projects.vercel.app"
+name: E2E purchase
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: e2e-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  statuses: read
+
+jobs:
+  e2e:
+    name: e2e purchase on Preview
+    # Secrets aren't available to pull requests from forks.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # The script needs Playwright's full Chromium: Stripe's checkout ignores the stripped-down headless shell.
+      - run: npx playwright install --with-deps chromium
+
+      - name: Wait for the Vercel Preview
+        id: preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          SUFFIX: ${{ vars.VERCEL_PREVIEW_URL_SUFFIX || '-petebouchers-projects.vercel.app' }}
+        run: |
+          # Vercel reports each deployment as a commit status named "Vercel"; the newest one comes first.
+          state=""
+          for i in $(seq 1 80); do
+            state=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/statuses" --jq '[.[] | select(.context == "Vercel")][0].state // ""')
+            case "$state" in
+              success) break ;;
+              failure|error) echo "::error::The Vercel Preview deployment failed."; exit 1 ;;
+            esac
+            sleep 15
+          done
+          if [ "$state" != success ]; then echo "::error::No successful Vercel Preview after 20 minutes (last state: ${state:-none})."; exit 1; fi
+          # The branch URL always points at the branch's latest Preview.
+          slug=$(printf '%s' "$BRANCH" | tr 'A-Z' 'a-z' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
+          host="minemap-git-${slug}${SUFFIX}"
+          if [ ${#host} -gt 63 ]; then echo "::error::Branch name too long: Vercel shortens hostnames over 63 characters ($host). Use a shorter branch name."; exit 1; fi
+          echo "url=https://$host" >> "$GITHUB_OUTPUT"
+          echo "Preview: https://$host"
+
+      - name: Run the e2e purchase test
+        env:
+          E2E_BASE_URL: ${{ steps.preview.outputs.url }}
+          STRIPE_SECRET_KEY: ${{ secrets.E2E_STRIPE_SECRET_KEY }}
+          STRIPE_PAYMENT_LINK_ID: ${{ vars.E2E_STRIPE_PAYMENT_LINK_ID }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          POSTHOG_PERSONAL_API_KEY: ${{ secrets.POSTHOG_PERSONAL_API_KEY }}
+          E2E_ARTIFACTS: ${{ runner.temp }}
+        run: npm run e2e:purchase
+
+      - name: Upload the failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure
+          path: ${{ runner.temp }}/minemap-e2e-failure.png
+          if-no-files-found: ignore

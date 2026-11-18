@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e:purchase": "tsx --env-file=.env.local scripts/e2e-purchase.ts"
+    "e2e:purchase": "tsx --env-file-if-exists=.env.local scripts/e2e-purchase.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

@@ -187,6 +187,17 @@ E2E_BASE_URL=https://<preview deployment> npm run e2e:purchase
   - `VERCEL_AUTOMATION_BYPASS_SECRET`, from *Project → Settings → Deployment Protection → Protection Bypass for Automation*. Vercel Pro protects Previews with a login, and the script sends this secret only to the Preview, never to Stripe.
 - **A Preview URL:** any Preview deployment works. The branch URL (`minemap-git-<branch>-<team>.vercel.app`) stays the same across pushes.
 
+**In CI:** [.github/workflows/e2e-preview.yml](../.github/workflows/e2e-preview.yml) runs the test on every pull request into `main`. It waits for Vercel's Preview of the PR (the "Vercel" commit status), then tests the branch URL `minemap-git-<branch>-petebouchers-projects.vercel.app`. Make *e2e purchase on Preview* a required check on `main` so a PR can't be merged until it passes. It needs these repository settings (*Settings → Secrets and variables → Actions*):
+
+| Kind | Name | Value |
+| --- | --- | --- |
+| secret | `E2E_STRIPE_SECRET_KEY` | a sandbox restricted key (`rk_test_…`) with **Checkout Sessions: Read** and **Payment Links: Read** (the script checks the link first) |
+| secret | `VERCEL_AUTOMATION_BYPASS_SECRET` | the same bypass secret as in `.env.local` |
+| secret | `POSTHOG_PERSONAL_API_KEY` | optional: turns on the audit-event check |
+| variable | `E2E_STRIPE_PAYMENT_LINK_ID` | `plink_1Ucox323L6ObqQbB4esNXqTJ` |
+
+Each run makes one sandbox purchase. Pull requests from forks are skipped, because they don't get secrets. Branch names need to stay short (up to about 29 characters): Vercel shortens longer Preview hostnames, and the workflow fails with a clear message if that happens.
+
 The script refuses live keys and live links. Set `E2E_HEADED=1` to watch the browser. On a failure, it saves a screenshot and prints its path.
 
 Things that look like bugs but aren't:
