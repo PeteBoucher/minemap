@@ -57,12 +57,6 @@ async function stripe<T>(path: string): Promise<T> {
   return body as T;
 }
 
-/** Fills a Checkout field if it's on the page; Stripe shows different fields per country and layout. */
-async function fillIfShown(page: Page, selector: string, value: string) {
-  const el = page.locator(selector).first();
-  if (await el.isVisible().catch(() => false)) await el.fill(value);
-}
-
 async function payOnCheckout(page: Page, url: string) {
   await page.goto(url);
   await page.locator("#email").fill(BUYER.email);
@@ -75,9 +69,12 @@ async function payOnCheckout(page: Page, url: string) {
   await page.locator("#cardCvc").fill("123");
   await page.locator("#billingName").fill(BUYER.name);
   await page.locator("#billingCountry").selectOption(BUYER.country);
-  await fillIfShown(page, "#billingAddressLine1", BUYER.line1);
-  await fillIfShown(page, "#billingPostalCode", BUYER.postal);
-  await fillIfShown(page, "#billingLocality", BUYER.city);
+  await page.locator("#billingAddressLine1").fill(BUYER.line1);
+  // Depending on where the browser is (GitHub's US runners, for one), typing the street opens Google
+  // address suggestions over the postcode, city and province fields. Close them before going on.
+  await page.keyboard.press("Escape");
+  await page.locator("#billingPostalCode").fill(BUYER.postal);
+  await page.locator("#billingLocality").fill(BUYER.city);
   const province = page.locator("#billingAdministrativeArea");
   if (await province.isVisible().catch(() => false)) {
     await province.selectOption({ label: BUYER.province }).catch(() => province.fill(BUYER.province));
@@ -196,9 +193,10 @@ async function main() {
   if (!PH_KEY) {
     console.log("  - skipped: set POSTHOG_PERSONAL_API_KEY (query:read) to check the license_unlock event");
   } else {
-    // Ingestion takes a minute or two before events are queryable.
-    const ev = await waitFor("the license_unlock event", () => auditEvent(sessionId), 180_000, 10_000).catch(() => null);
-    check(ev?.result === "issued", "license_unlock event recorded as issued", ev ? ev.result : "not found after 3 minutes");
+    // Events usually become queryable within 2–7 minutes of the purchase.
+    let lastError = "";
+    const ev = await waitFor("the license_unlock event", () => auditEvent(sessionId).catch((e) => { lastError = (e as Error).message; return null; }), 600_000, 15_000).catch(() => null);
+    check(ev?.result === "issued", "license_unlock event recorded as issued", ev ? ev.result : lastError || "not found after 10 minutes");
     if (ev) check(ev.deploy_env === "preview", "event tagged as a preview deployment", `deploy_env ${ev.deploy_env}`);
   }
 }
