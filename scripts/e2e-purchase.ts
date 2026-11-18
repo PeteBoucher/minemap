@@ -126,15 +126,17 @@ async function auditEvent(sessionId: string): Promise<{ result: string; deploy_e
   return rows.length ? { result: rows[0][0], deploy_env: rows[0][1] } : null;
 }
 
-/** Sends Stripe's redirect to the Preview, and the bypass secret only to the Preview. */
+/** Sends Stripe's redirect to the Preview, and gets past the Preview's Deployment Protection. */
 async function routeToPreview(page: Page) {
   await page.route(`${LINK_REDIRECT_ORIGIN}/**`, (route) => {
     const u = new URL(route.request().url());
     return route.fulfill({ status: 302, headers: { location: `${BASE_URL}${u.pathname}${u.search}` } });
   });
   if (BYPASS) {
-    await page.route(`${BASE_URL}/**`, (route) =>
-      route.continue({ headers: { ...route.request().headers(), "x-vercel-protection-bypass": BYPASS } }));
+    // Playwright doesn't route the request a fulfilled redirect leads to, so a header can't be added
+    // there. Instead Vercel sets a bypass cookie, scoped to the Preview's host, on this first visit.
+    const q = new URLSearchParams({ "x-vercel-protection-bypass": BYPASS, "x-vercel-set-bypass-cookie": "true" });
+    await page.goto(`${BASE_URL}/?${q}`);
   }
 }
 
@@ -156,8 +158,10 @@ async function main() {
   try {
     await routeToPreview(page);
     const probe = await page.request.get(`${BASE_URL}/`, { headers: BYPASS ? { "x-vercel-protection-bypass": BYPASS } : {}, maxRedirects: 0 });
-    if (probe.status() === 401 || probe.status() === 403 || probe.status() === 307)
-      throw new Error(`Preview answered HTTP ${probe.status()}: it's protected. Set VERCEL_AUTOMATION_BYPASS_SECRET.`);
+    // Vercel's Deployment Protection answers with 401 or a redirect to its login (vercel.com/sso-api).
+    const toLogin = /vercel\.com\//.test(probe.headers()["location"] ?? "");
+    if (probe.status() === 401 || probe.status() === 403 || toLogin)
+      throw new Error(`Preview answered HTTP ${probe.status()}: it's protected. ${BYPASS ? "VERCEL_AUTOMATION_BYPASS_SECRET was rejected." : "Set VERCEL_AUTOMATION_BYPASS_SECRET."}`);
     await payOnCheckout(page, link.url);
     // The app strips ?session_id= from the address bar straight away, so watch its call to the API instead.
     const unlock = await page.waitForResponse((r) => r.url().startsWith(`${BASE_URL}/api/unlock?`), { timeout: 90_000 });
