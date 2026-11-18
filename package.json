@@ -8,12 +8,14 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "e2e:purchase": "tsx --env-file=.env.local scripts/e2e-purchase.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
     "fake-indexeddb": "^6.2.8",
     "jpeg-js": "^0.4.4",
+    "playwright": "^1.65.1",
     "tsx": "^4.23.15",
     "typescript": "~7.0.2",
     "vite": "^8.3.6",
