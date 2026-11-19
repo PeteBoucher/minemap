@@ -1,5 +1,7 @@
 # Runs the sandbox purchase test (scripts/e2e-purchase.ts) against each pull request's Vercel Preview.
-# Make "e2e purchase on Preview" a required check on main to block merging until it passes.
+# "e2e purchase on Preview" is a required check on main. It runs the purchase only when a PR touches
+# payment code (PAYMENT_PATHS below); otherwise the job passes in seconds. Filtering with `on.paths`
+# instead would leave the required check unreported, and the PR blocked for good.
 #
 # Repository settings (Settings > Secrets and variables > Actions):
 #   secret   E2E_STRIPE_SECRET_KEY            rk_test_… with Checkout Sessions: Read and Payment Links: Read
@@ -20,6 +22,7 @@ concurrency:
 permissions:
   contents: read
   statuses: read
+  pull-requests: read
 
 jobs:
   e2e:
@@ -29,20 +32,43 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
+      - name: Does this PR touch payment code?
+        id: changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          PAYMENT_PATHS: >-
+            ^(api/|server/|src/core/license|src/store/unlock|src/ui/paywall|scripts/e2e-purchase\.ts$|\.github/workflows/e2e-preview\.yml$|package(-lock)?\.json$)
+        run: |
+          files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename')
+          hits=$(printf '%s\n' "$files" | grep -E "$PAYMENT_PATHS" || true)
+          if [ -n "$hits" ]; then
+            echo "Payment code changed, running the purchase test:"; printf '  %s\n' $hits
+            echo "payments=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No payment code changed; skipping the purchase test."
+            echo "payments=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.changes.outputs.payments == 'true'
 
       - uses: actions/setup-node@v4
+        if: steps.changes.outputs.payments == 'true'
         with:
           node-version: 24
           cache: npm
 
       - run: npm ci
+        if: steps.changes.outputs.payments == 'true'
 
       # The script needs Playwright's full Chromium: Stripe's checkout ignores the stripped-down headless shell.
       - run: npx playwright install --with-deps chromium
+        if: steps.changes.outputs.payments == 'true'
 
       - name: Wait for the Vercel Preview
         id: preview
+        if: steps.changes.outputs.payments == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.event.pull_request.head.sha }}
@@ -68,6 +94,7 @@ jobs:
           echo "Preview: https://$host"
 
       - name: Run the e2e purchase test
+        if: steps.changes.outputs.payments == 'true'
         env:
           E2E_BASE_URL: ${{ steps.preview.outputs.url }}
           STRIPE_SECRET_KEY: ${{ secrets.E2E_STRIPE_SECRET_KEY }}
