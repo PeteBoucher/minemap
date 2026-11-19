@@ -9,6 +9,9 @@ const HOST: string = import.meta.env.VITE_POSTHOG_HOST || "https://eu.i.posthog.
 
 let ph: PostHog | null = null;
 
+/** Analytics is configured for this build; without a key there's nothing to ask consent for. */
+export const analyticsAvailable = KEY !== "" || import.meta.env.DEV;
+
 const storage = (): Storage | undefined => {
   try { return window.localStorage; } catch { return undefined; }
 };
