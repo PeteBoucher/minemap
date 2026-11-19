@@ -16,6 +16,7 @@ import { MapView } from "./ui/map";
 import { renderBiomeLegend, renderList, renderRoute } from "./ui/panels";
 import { terrainFor } from "./ui/terrain";
 import { analyticsAvailable, currentConsent, initAnalytics, setConsent } from "./ui/analytics";
+import type { Answer } from "./core/consent";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -368,12 +369,12 @@ document.addEventListener("click", (e) => {
 });
 
 /* ---------- analytics consent ---------- */
-const answerConsent = (answer: "granted" | "denied") => { setConsent(answer); $("consent").hidden = true; };
+const answerConsent = (answer: Answer) => { setConsent(answer); $("consent").hidden = true; };
 $("consentYes").onclick = () => answerConsent("granted");
 $("consentNo").onclick = () => answerConsent("denied");
 $("analyticsLink").onclick = () => { $("consent").hidden = false; };
 $("consent").hidden = !analyticsAvailable || currentConsent() !== null;
-($("analyticsLink").parentElement as HTMLElement).hidden = !analyticsAvailable;
+$("analyticsFoot").hidden = !analyticsAvailable;
 initAnalytics();
 
 /* ---------- start ---------- */
