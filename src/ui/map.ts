@@ -1,5 +1,6 @@
 // SVG map: biome tint, game-map screenshots, grid, compass, day-reach shape, route line and pins.
 // Ported from the prototype's draw(), zoomAt(), panBy() and pointer handlers.
+import { Fingers } from "../core/fingers";
 import { biomeCol } from "../core/biomes";
 import { placeLabels } from "../core/labels";
 import { SWITCH_CROP } from "../core/terrain";
@@ -201,9 +202,16 @@ export class MapView {
   }
 
   private bindPointer(): void {
-    const svg = this.svg, ptrs = new Map<number, [number, number]>();
+    const svg = this.svg, ptrs = new Fingers();
     svg.addEventListener("wheel", (e) => { e.preventDefault(); this.zoomAt(Math.exp(-e.deltaY * 0.0015), ...this.svgPt(e)); }, { passive: false });
-    svg.addEventListener("pointerdown", (e) => { ptrs.set(e.pointerId, this.svgPt(e)); if (ptrs.size === 1) this.dragged = false; });
+    svg.addEventListener("pointerdown", (e) => {
+      ptrs.down(e.pointerId, this.svgPt(e), e.isPrimary);
+      if (ptrs.size === 1) this.dragged = false;
+      // A pinch redraws the map under both fingers. Capture them on the svg, which is never redrawn,
+      // or iOS sends their lift-off to the removed element and the map never hears it (issue #7).
+      // Single taps stay uncaptured so their click still reaches the place that was tapped.
+      if (ptrs.size === 2) for (const id of ptrs.ids()) { try { svg.setPointerCapture(id); } catch { /* finger already gone */ } }
+    });
     svg.addEventListener("pointermove", (e) => {
       const was = ptrs.get(e.pointerId);
       if (!was) return;
@@ -215,14 +223,14 @@ export class MapView {
         this.panBy(now[0] - was[0], now[1] - was[1]);
       } else if (ptrs.size === 2) {
         // pinch: zoom by the change in finger spacing, around the midpoint
-        const other = [...ptrs].find(([id]) => id !== e.pointerId)![1];
+        const other = ptrs.other(e.pointerId)!;
         const d0 = Math.hypot(was[0] - other[0], was[1] - other[1]), d1 = Math.hypot(now[0] - other[0], now[1] - other[1]);
         this.dragged = true;
         ptrs.set(e.pointerId, now);
         if (d0 > 0) this.zoomAt(d1 / d0, (now[0] + other[0]) / 2, (now[1] + other[1]) / 2);
       }
     });
-    const lift = (e: PointerEvent) => { ptrs.delete(e.pointerId); svg.style.cursor = ""; };
+    const lift = (e: PointerEvent) => { ptrs.up(e.pointerId); svg.style.cursor = ""; };
     svg.addEventListener("pointerup", lift);
     svg.addEventListener("pointercancel", lift);
     // a drag or pinch must not also count as tapping a place
