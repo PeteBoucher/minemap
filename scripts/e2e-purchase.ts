@@ -89,11 +89,20 @@ async function payOnCheckout(page: Page, url: string) {
 
 async function closeAddressSuggestions(page: Page) {
   const box = page.getByText("Suggestions powered by");
-  for (let i = 0; i < 3 && (await box.isVisible().catch(() => false)); i++) {
-    await page.keyboard.press("Escape");
+  const open = () => box.isVisible().catch(() => false);
+  // A page-level Escape goes to whichever field has focus (by now the city or province), not the
+  // street field that owns the suggestions. So send it to the street field, then click away from it.
+  const attempts: [string, () => Promise<unknown>][] = [
+    ["Escape in the street field", () => page.locator("#billingAddressLine1").press("Escape")],
+    ["a click outside the box", () => page.getByText("Contact information").click({ timeout: 2000 })],
+  ];
+  for (const [how, attempt] of attempts) {
+    if (!(await open())) return;
+    await attempt().catch(() => {});
     await box.waitFor({ state: "hidden", timeout: 2000 }).catch(() => {});
+    console.log(`  · address suggestions ${(await open()) ? "still open after" : "closed by"} ${how}`);
   }
-  if (await box.isVisible().catch(() => false)) throw new Error("Google address suggestions won't close; Pay would be ignored");
+  if (await open()) throw new Error("Google address suggestions won't close; Pay would be ignored");
 }
 
 /** The app keeps the licence in IndexedDB (idb-keyval's default store) only after verifying it. */
