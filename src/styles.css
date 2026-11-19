@@ -87,7 +87,7 @@ svg#map text{font-family:var(--mono);fill:var(--muted)}
 #placeForm{display:grid;grid-template-columns:1fr 70px 70px auto;gap:6px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
 #placeForm h2{grid-column:1/-1;margin:0 0 2px}
 @media (max-width:420px){#placeForm{grid-template-columns:1fr 1fr}}
-#placeForm .opts{grid-column:2/-1;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:.88rem;color:var(--muted)}
+#placeForm .opts{grid-column:2/-1;contain:inline-size;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:.88rem;color:var(--muted)}
 #placeForm .opts label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
 @media (max-width:420px){#placeForm #newBiome,#placeForm .opts{grid-column:1/-1}}
 input,select{font:inherit;font-size:.9rem;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);min-width:0}
