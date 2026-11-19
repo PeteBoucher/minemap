@@ -15,6 +15,7 @@ import { isUnlocked } from "./store/unlock";
 import { MapView } from "./ui/map";
 import { renderBiomeLegend, renderList, renderRoute } from "./ui/panels";
 import { terrainFor } from "./ui/terrain";
+import { currentConsent, initAnalytics, setConsent } from "./ui/analytics";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -365,6 +366,14 @@ document.addEventListener("click", (e) => {
   const menu = $("worldMenu") as HTMLDetailsElement;
   if (menu.open && !menu.contains(e.target as Node)) menu.open = false;
 });
+
+/* ---------- analytics consent ---------- */
+const answerConsent = (answer: "granted" | "denied") => { setConsent(answer); $("consent").hidden = true; };
+$("consentYes").onclick = () => answerConsent("granted");
+$("consentNo").onclick = () => answerConsent("denied");
+$("analyticsLink").onclick = () => { $("consent").hidden = false; };
+$("consent").hidden = currentConsent() !== null;
+initAnalytics();
 
 /* ---------- start ---------- */
 (async () => {

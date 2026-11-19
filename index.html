@@ -100,7 +100,19 @@
         </div>
       </div>
     </div>
+    <footer class="foot"><button type="button" class="linkbtn" id="analyticsLink">Analytics &amp; privacy</button></footer>
     <dialog id="importDlg" aria-label="Add a map screenshot"></dialog>
+    <aside id="consent" class="consent" aria-label="Analytics" hidden>
+      <p>
+        <strong>Help improve Minemap?</strong> If you agree, Minemap uses PostHog (hosted in the EU) and its cookies
+        to count visits, measure loading speed, catch errors and record how the app is used, with anything you type
+        hidden. Nothing is collected unless you accept, and you can change your mind under “Analytics &amp; privacy” at the bottom of the page.
+      </p>
+      <div class="consent-btns">
+        <button type="button" class="btn" id="consentYes">Accept</button>
+        <button type="button" class="btn ghost" id="consentNo">No thanks</button>
+      </div>
+    </aside>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
