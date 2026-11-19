@@ -1,12 +1,12 @@
 import fs from "node:fs";
 import jpeg from "jpeg-js";
 import { describe, expect, it } from "vitest";
-import { SWITCH_CROP } from "../core/terrain";
+import { type Crop, SWITCH_CROP } from "../core/terrain";
 import { DEMO_MAPS } from "../store/demoWorld";
 import { analyzeScreenshot } from "./analyze";
 import { detectCrop } from "./crop";
 import fixtures from "./ocr.fixtures.json";
-import { readPosition } from "./ocr";
+import { positionFromText, readPosition } from "./ocr";
 import { checkScales, placeFromPosition } from "./place";
 
 const decode = (file: string) => jpeg.decode(fs.readFileSync(new URL(`../../public/demo/${file}`, import.meta.url)), { useTArray: true });
@@ -20,16 +20,30 @@ describe("readPosition", () => {
     expect(readPosition(decode(file))).toEqual(expected(file));
   });
 
+  it("reads the numbers even when split-screen blur breaks up the label", () => {
+    expect(positionFromText("? ??s itio??: 648, 94, 2823")).toEqual({ x: 648, y: 94, z: 2823 });
+  });
+
+  it("rejects a line where a digit was misread as the colon", () => {
+    expect(positionFromText("Position: -13:41, 64, 3828")).toBeNull();
+  });
+
   it("returns null when there are no coordinates on screen", () => {
     const blank = { width: 1280, height: 720, data: new Uint8Array(1280 * 720 * 4).fill(90) };
     expect(readPosition(blank)).toBeNull();
   });
 });
 
+// Where the map is in fixtures that aren't demo maps (split-screen holds it in the left half).
+// Written out, not taken from crop.ts, so the test doesn't check the code against itself.
+const NOT_IN_DEMO: Record<string, Crop> = {
+  "2026111819161400-11B64E28AD7A49CA9EC8AC007BE858C6.jpg": { x: 49, y: 60, size: 542 },
+};
+
 describe("detectCrop", () => {
   it.each(Object.keys(fixtures))("finds the held map in %s", (file) => {
     const m = DEMO_MAPS.find((d) => d.file === file);
-    expect(detectCrop(decode(file))?.crop).toEqual(m?.crop ?? SWITCH_CROP);
+    expect(detectCrop(decode(file))?.crop).toEqual(m?.crop ?? NOT_IN_DEMO[file] ?? SWITCH_CROP);
   });
 
   // Other devices and Java Edition hold the map elsewhere and at other sizes: move and shrink our
