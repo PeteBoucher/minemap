@@ -76,6 +76,7 @@ Audit events carry `deploy_env` (`production` or `preview`), so sandbox runs on 
    | `STRIPE_PAYMENT_LINK_ID` | `plink_…` | optional: only this link unlocks |
    | `POSTHOG_KEY` | PostHog project API key (`phc_…`) | optional: turns on the audit trail. It's an ingestion-only key, so it doesn't need to be sensitive. |
    | `POSTHOG_HOST` | `https://eu.i.posthog.com` | optional: the default |
+   | `VITE_POSTHOG_KEY` | the same `phc_…` key | optional: real user monitoring in the app, only after a visitor accepts the banner ([ADR 0002](adr/0002-analytics-only-after-consent.md)). Without it there's no banner. Public, used at build time. |
 
    - **Scope:** set the Stripe values per environment. Live values go on *Production*; sandbox values go on *Preview* (see [End-to-end test](#end-to-end-test)).
    - **Redeploy after any change, with "Use existing build cache" unticked.** The `VITE_` values are built into the app's JavaScript, so a redeploy that reuses the cache keeps the old ones.

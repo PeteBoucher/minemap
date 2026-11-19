@@ -23,7 +23,8 @@
     "vitest": "^5.1.0"
   },
   "dependencies": {
-    "idb-keyval": "^6.3.0"
+    "idb-keyval": "^6.3.0",
+    "posthog-js": "^1.453.0"
   },
   "license": "MIT"
 }

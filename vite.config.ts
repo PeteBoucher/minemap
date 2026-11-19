@@ -6,6 +6,8 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg"],
+      // PostHog loads only after the visitor accepts analytics (ADR 0002), so don't precache it for everyone.
+      workbox: { globIgnores: ["**/posthog-*.js"] },
       manifest: {
         name: "Minemap",
         short_name: "Minemap",
@@ -20,6 +22,9 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    rollupOptions: { output: { manualChunks: (id) => (id.includes("/node_modules/posthog-js/") ? "posthog" : undefined) } },
+  },
   test: {
     include: ["src/**/*.test.ts", "server/**/*.test.ts"],
   },
