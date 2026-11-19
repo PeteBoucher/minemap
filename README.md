@@ -7,7 +7,7 @@
 
 A map companion for Minecraft that runs in the browser and installs as an app (a PWA). Save places, plan routes between them, and line up screenshots of your in-game maps. Built for console and mobile players who can't use map mods.
 
-![Minemap showing the demo world: places and imported game maps on a grid, with the places list and a route from Hobbiton to the world spawn point](docs/images/screenshot.jpg)
+![Minemap showing the demo world: places on imported game maps, a route from Mountain Village to Cliffton with its one-day range, and the places list](docs/images/screenshot.jpg)
 
 - Plan: [docs/PLAN.md](docs/PLAN.md)
 - Original single-file prototype: [docs/prototype.html](docs/prototype.html)
