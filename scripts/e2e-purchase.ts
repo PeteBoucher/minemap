@@ -82,7 +82,18 @@ async function payOnCheckout(page: Page, url: string) {
   // Stripe recalculates tax once the address is in; a click during that is silently ignored.
   // (Stripe's page never goes network-idle: it keeps sending analytics beacons.)
   await page.waitForTimeout(2500);
+  // The suggestions can arrive after the Escape above and reopen over the form; Stripe then ignores Pay.
+  await closeAddressSuggestions(page);
   await page.locator('[data-testid="hosted-payment-submit-button"]').click();
+}
+
+async function closeAddressSuggestions(page: Page) {
+  const box = page.getByText("Suggestions powered by");
+  for (let i = 0; i < 3 && (await box.isVisible().catch(() => false)); i++) {
+    await page.keyboard.press("Escape");
+    await box.waitFor({ state: "hidden", timeout: 2000 }).catch(() => {});
+  }
+  if (await box.isVisible().catch(() => false)) throw new Error("Google address suggestions won't close; Pay would be ignored");
 }
 
 /** The app keeps the licence in IndexedDB (idb-keyval's default store) only after verifying it. */
