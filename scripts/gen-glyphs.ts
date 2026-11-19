@@ -9,7 +9,7 @@
 // Also reports a leave-one-out check: each screenshot read with templates built without it.
 import fs from "node:fs";
 import jpeg from "jpeg-js";
-import { type Glyph, type Line, findLines, glyphDistance, segment } from "../src/import/ocr";
+import { type Glyph, type Line, WORD_GAP, findLines, glyphDistance, segment } from "../src/import/ocr";
 
 type Template = { ch: string; wu: number; cells: number[] };
 const fixtures: Record<string, string> = JSON.parse(fs.readFileSync("src/import/ocr.fixtures.json", "utf8"));
@@ -28,12 +28,16 @@ for (const file of Object.keys(fixtures)) {
 function labelled(file: string): [string, Glyph][] {
   const [label, ...numbers] = fixtures[file].split(" "), line = lines.get(file)!;
   const words: Glyph[][] = [];
-  line.glyphs.forEach((g, i) => (i === 0 || g.gap > 2 ? words.push([g]) : words.at(-1)!.push(g)));
-  const at = words.findIndex((_, k) => k > 0 && numbers.every((n, j) => words[k + j]?.length === n.length));
-  if (at < 0) throw new Error(`Can't match the numbers in ${file} with its glyphs`);
-  const pairs = (texts: string[], ws: Glyph[][]) => texts.flatMap((t, j) => [...t].map((ch, i): [string, Glyph] => [ch, ws[j][i]]));
-  const before = words.slice(0, at).flat();
-  return [...(before.length === label.length ? pairs([label], [before]) : []), ...pairs(numbers, words.slice(at, at + 3))];
+  line.glyphs.forEach((g, i) => (i === 0 || g.gap > WORD_GAP ? words.push([g]) : words.at(-1)!.push(g)));
+  const firstNumber = words.findIndex((_, k) => k > 0 && numbers.every((n, j) => words[k + j]?.length === n.length));
+  if (firstNumber < 0) throw new Error(`Can't match the numbers in ${file} with its glyphs`);
+  const pair = (texts: string[], glyphRuns: Glyph[][]) =>
+    texts.flatMap((text, j) => [...text].map((ch, i): [string, Glyph] => [ch, glyphRuns[j][i]]));
+  const labelGlyphs = words.slice(0, firstNumber).flat();
+  return [
+    ...(labelGlyphs.length === label.length ? pair([label], [labelGlyphs]) : []),
+    ...pair(numbers, words.slice(firstNumber, firstNumber + numbers.length)),
+  ];
 }
 
 function build(files: string[]): Template[] {
