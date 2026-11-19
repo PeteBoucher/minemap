@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dirName, mapCorner, toNether, yaw } from "./geo";
+import { coordsText, dirName, mapCorner, toNether, yaw } from "./geo";
 
 // Map placements recorded by hand in the prototype's MAPS list (x, z = north-west corner).
 const PROTOTYPE_MAPS = [
@@ -36,5 +36,15 @@ describe("headings", () => {
   });
   it("converts to Nether coordinates", () => {
     expect(toNether(401, 935)).toEqual({ x: 50, z: 117 });
+  });
+});
+
+describe("coordsText", () => {
+  // Values as the places list shows them for the demo world.
+  it.each([
+    [726, 1740, "726, 1740 · Nether 91, 218"], // Cliffton
+    [-3550, 9450, "-3550, 9450 · Nether -444, 1181"], // Mansion village
+  ])("%i, %i reads %s", (x, z, want) => {
+    expect(coordsText(x, z)).toBe(want);
   });
 });
