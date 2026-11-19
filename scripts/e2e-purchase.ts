@@ -67,14 +67,24 @@ async function payOnCheckout(page: Page, url: string) {
   await page.locator("#cardNumber").fill("4242424242424242");
   await page.locator("#cardExpiry").fill("12 / 34");
   await page.locator("#cardCvc").fill("123");
-  await page.locator("#billingName").fill(BUYER.name);
+  // Which address fields Checkout asks for depends on the link's billing_address_collection: all of
+  // them for "required", only what tax needs (country, maybe postcode) for "auto". Fill what's shown.
+  const shown = async (sel: string) => page.locator(sel).isVisible().catch(() => false);
+  if (await shown("#billingName")) await page.locator("#billingName").fill(BUYER.name);
   await page.locator("#billingCountry").selectOption(BUYER.country);
-  await page.locator("#billingAddressLine1").fill(BUYER.line1);
-  // Depending on where the browser is (GitHub's US runners, for one), typing the street opens Google
-  // address suggestions over the postcode, city and province fields. Close them before going on.
-  await page.keyboard.press("Escape");
-  await page.locator("#billingPostalCode").fill(BUYER.postal);
-  await page.locator("#billingLocality").fill(BUYER.city);
+  await page.waitForTimeout(500); // the form re-renders for the chosen country
+  const fields = ["#billingName", "#billingAddressLine1", "#billingPostalCode", "#billingLocality", "#billingAdministrativeArea"];
+  const visible = [];
+  for (const f of fields) if (await shown(f)) visible.push(f.replace("#billing", ""));
+  console.log(`  · address fields shown: Country${visible.length ? ", " + visible.join(", ") : ""}`);
+  if (await shown("#billingAddressLine1")) {
+    await page.locator("#billingAddressLine1").fill(BUYER.line1);
+    // Depending on where the browser is (GitHub's US runners, for one), typing the street opens Google
+    // address suggestions over the postcode, city and province fields. Close them before going on.
+    await page.locator("#billingAddressLine1").press("Escape");
+  }
+  if (await shown("#billingPostalCode")) await page.locator("#billingPostalCode").fill(BUYER.postal);
+  if (await shown("#billingLocality")) await page.locator("#billingLocality").fill(BUYER.city);
   const province = page.locator("#billingAdministrativeArea");
   if (await province.isVisible().catch(() => false)) {
     await province.selectOption({ label: BUYER.province }).catch(() => province.fill(BUYER.province));
@@ -84,7 +94,19 @@ async function payOnCheckout(page: Page, url: string) {
   await page.waitForTimeout(2500);
   // The suggestions can arrive after the Escape above and reopen over the form; Stripe then ignores Pay.
   await closeAddressSuggestions(page);
-  await page.locator('[data-testid="hosted-payment-submit-button"]').click();
+  // Pay can still be ignored if Checkout is re-validating the address. Click again until the page
+  // starts processing (the button disables) or leaves Checkout; a session can't be paid twice.
+  const pay = page.locator('[data-testid="hosted-payment-submit-button"]');
+  const startUrl = page.url();
+  for (let i = 1; i <= 3; i++) {
+    await pay.click().catch(() => {});
+    const started = await page.waitForFunction(
+      ([url, sel]) => location.href !== url || (document.querySelector(sel) as HTMLButtonElement | null)?.disabled === true,
+      [startUrl, '[data-testid="hosted-payment-submit-button"]'] as const, { timeout: 8000 },
+    ).then(() => true, () => false);
+    if (started) return;
+    console.log(`  · Pay click ${i} was ignored`);
+  }
 }
 
 async function closeAddressSuggestions(page: Page) {

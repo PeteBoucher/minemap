@@ -59,7 +59,7 @@ Audit events carry `deploy_env` (`production` or `preview`), so sandbox runs on 
    3. Create a **Payment Link** for it:
       - **Managed Payments:** enabled.
       - **After payment:** choose *Don't show confirmation page* and redirect to `https://minemap.me/?session_id={CHECKOUT_SESSION_ID}`. Type the braces exactly. **Without this redirect, buyers pay but never get back to the app.**
-      - **Billing address:** required. Stripe needs it to work out the tax.
+      - **Billing address:** *auto* (`billing_address_collection: auto`; in the Dashboard, *Collect customers' addresses* off). Stripe then asks only for what tax needs, the country and sometimes a postcode. Don't use *required*: it adds a street field with Google address suggestions that won't let buyers enter a street Google doesn't know.
       - **Shipping:** none.
       - Managed Payments turns on automatic tax itself, with Stripe as the liable party, so the link shows it as on. That's expected.
    4. Create a **restricted key** (*Developers → API keys → Create restricted key*) with **Checkout Sessions: Read** and every other permission set to *None*.
@@ -95,7 +95,7 @@ Until steps 1 and 5 are done, the unlock button is disabled and says unlocking i
    - [ ] tax included in the price;
    - [ ] the eligible tax code;
    - [ ] Managed Payments on for the link;
-   - [ ] billing address required;
+   - [ ] billing address *auto*, not *required*;
    - [ ] **the *After payment* redirect to `https://minemap.me/?session_id={CHECKOUT_SESSION_ID}`.**
 
    In live mode, Managed Payments can only be turned on once a product exists, so create the product first.
@@ -174,7 +174,7 @@ E2E_BASE_URL=https://<preview deployment> npm run e2e:purchase
 
 [scripts/e2e-purchase.ts](../scripts/e2e-purchase.ts) checks a sandbox purchase end to end, against a **Vercel Preview deployment**. minemap.me runs on live keys and can't see sandbox sessions, so the script refuses it.
 
-1. **In the browser** (Playwright): it pays through the real sandbox Payment Link with a Spanish billing address. The link redirects to `minemap.me/?session_id=…`, and inside the script's browser only, that redirect is rerouted to the Preview. It then checks that the Preview's `/api/unlock` returns a licence and that the app stores it.
+1. **In the browser** (Playwright): it pays through the real sandbox Payment Link with Spain as the billing country. The link redirects to `minemap.me/?session_id=…`, and inside the script's browser only, that redirect is rerouted to the Preview. It then checks that the Preview's `/api/unlock` returns a licence and that the app stores it.
 2. **In Stripe:** the session is complete and paid; the total is exactly $5.00 with IVA inside it; Managed Payments is on; it came from our link; it was billed to Spain.
 3. **In PostHog:** a `license_unlock` event with result `issued` and `deploy_env: preview` arrives for the session. This step needs `POSTHOG_PERSONAL_API_KEY` (`phx_…` with `query:read`) and is skipped without it.
 
@@ -203,7 +203,9 @@ The script refuses live keys and live links. Set `E2E_HEADED=1` to watch the bro
 Things that look like bugs but aren't:
 
 - It uses Playwright's full Chromium browser (`channel: "chromium"`). With the default stripped-down headless browser, Stripe's checkout silently ignores the Pay click.
-- It waits a moment before clicking Pay, because Stripe recalculates tax after the address is entered, and a click during that is ignored. Stripe's page never goes network-idle, so the wait is a fixed pause.
+- It fills only the address fields Checkout shows, so it works whether the link collects addresses on *auto* or *required*. It prints which fields it saw.
+- It waits a moment before clicking Pay, because Stripe recalculates tax after the address is entered, and a click during that is ignored. Stripe's page never goes network-idle, so the wait is a fixed pause. If Pay is still ignored, it clicks again (up to 3 times); a session can't be paid twice.
+- With *required*, typing the street can open Google address suggestions over the form. The script closes them with Escape *in the street field*: an Escape sent to the page goes to whichever field has focus and leaves them open.
 - The app removes `?session_id=` from the address bar straight away, so the script reads the session id from the app's call to `/api/unlock`.
 
 ## Troubleshooting
