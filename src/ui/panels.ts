@@ -1,6 +1,6 @@
 // Place list, route panel and biome legend. Ported from the prototype's list(), route() and biomeLegend().
 import { biomeCol } from "../core/biomes";
-import { dirName, toNether, yaw } from "../core/geo";
+import { coordsText, dirName, toNether, yaw } from "../core/geo";
 import { DAYLIGHT, PACES, type Pace, STEP, type TravelCtx, dayVerdict, travel } from "../core/travel";
 import type { Place } from "../store/db";
 
@@ -120,6 +120,7 @@ export function renderRoute(R: HTMLElement, { selA: a, selB: b, ctx, reachFull, 
   const dl = document.createElement("dl");
   dl.className = "stats";
   const rows: [string, string, string?][] = [
+    ["To", coordsText(b.x, b.z)],
     ["Distance", `${d.toLocaleString("en-GB")} blocks`, "big"],
     ["Heading", `${dirName(dx, dz)} · face ${yaw(dx, dz)}°`],
     ["Go", `${Math.abs(dx)} ${dx >= 0 ? "east (+X)" : "west (−X)"}, ${Math.abs(dz)} ${dz >= 0 ? "south (+Z)" : "north (−Z)"}`],

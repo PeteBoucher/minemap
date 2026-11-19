@@ -16,6 +16,12 @@ export function toNether(x: number, z: number): { x: number; z: number } {
   return { x: Math.round(x / 8), z: Math.round(z / 8) };
 }
 
+/** A position as you'd type it in game, with its Nether match: "726, 1740 · Nether 91, 218". */
+export function coordsText(x: number, z: number): string {
+  const n = toNether(x, z);
+  return `${x}, ${z} · Nether ${n.x}, ${n.z}`;
+}
+
 /** Blocks covered by a map at zoom level 0–4: 128, 256, 512, 1024, 2048. */
 export const mapSize = (scale: number): number => 128 * 2 ** scale;
 
