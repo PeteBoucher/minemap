@@ -1,6 +1,7 @@
 // SVG map: biome tint, game-map screenshots, grid, compass, day-reach shape, route line and pins.
 // Ported from the prototype's draw(), zoomAt(), panBy() and pointer handlers.
 import { Fingers } from "../core/fingers";
+import { PageDrag, dragAction } from "../core/pageDrag";
 import { biomeCol } from "../core/biomes";
 import { placeLabels } from "../core/labels";
 import { SWITCH_CROP } from "../core/terrain";
@@ -193,8 +194,13 @@ export class MapView {
     this.draw();
   }
 
+  /** Fully zoomed out: the whole world is in view and there is nothing to pan. */
+  private get zoomedOut(): boolean {
+    return this.view.k === 1;
+  }
+
   private panBy(dx: number, dz: number): void {
-    if (this.view.k === 1) return;
+    if (this.zoomedOut) return;
     const T = this.T;
     this.view.cx = T.x0 + T.span / 2 - dx / T.S;
     this.view.cz = T.z0 + T.span / 2 - dz / T.S;
@@ -202,10 +208,11 @@ export class MapView {
   }
 
   private bindPointer(): void {
-    const svg = this.svg, ptrs = new Fingers();
+    const svg = this.svg, ptrs = new Fingers(), page = new PageDrag();
     svg.addEventListener("wheel", (e) => { e.preventDefault(); this.zoomAt(Math.exp(-e.deltaY * 0.0015), ...this.svgPt(e)); }, { passive: false });
     svg.addEventListener("pointerdown", (e) => {
       ptrs.down(e.pointerId, this.svgPt(e), e.isPrimary);
+      page.reset();
       if (ptrs.size === 1) this.dragged = false;
       // A pinch redraws the map under both fingers. Capture them on the svg, which is never redrawn,
       // or iOS sends their lift-off to the removed element and the map never hears it (issue #7).
@@ -220,7 +227,10 @@ export class MapView {
         if (!this.dragged && Math.hypot(now[0] - was[0], now[1] - was[1]) < 5) return; // still a tap
         if (!this.dragged) { this.dragged = true; svg.setPointerCapture(e.pointerId); svg.style.cursor = "grabbing"; }
         ptrs.set(e.pointerId, now);
-        this.panBy(now[0] - was[0], now[1] - was[1]);
+        // screenY, not clientY: in Safari clientY shifts with the page scroll
+        const act = dragAction(this.zoomedOut, e.pointerType);
+        if (act === "scroll") window.scrollTo(window.scrollX, page.target(e.screenY, window.scrollY));
+        else if (act === "pan") this.panBy(now[0] - was[0], now[1] - was[1]);
       } else if (ptrs.size === 2) {
         // pinch: zoom by the change in finger spacing, around the midpoint
         const other = ptrs.other(e.pointerId)!;
@@ -230,7 +240,7 @@ export class MapView {
         if (d0 > 0) this.zoomAt(d1 / d0, (now[0] + other[0]) / 2, (now[1] + other[1]) / 2);
       }
     });
-    const lift = (e: PointerEvent) => { ptrs.up(e.pointerId); svg.style.cursor = ""; };
+    const lift = (e: PointerEvent) => { ptrs.up(e.pointerId); page.reset(); svg.style.cursor = ""; };
     svg.addEventListener("pointerup", lift);
     svg.addEventListener("pointercancel", lift);
     // a drag or pinch must not also count as tapping a place
