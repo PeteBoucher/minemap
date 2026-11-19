@@ -2,8 +2,10 @@
 // Usage: npx tsx scripts/gen-glyphs.ts
 //
 // Each screenshot's expected text is in src/import/ocr.fixtures.json. Its text line is split into
-// glyphs, matched one-to-one with the expected characters, and the glyphs for each character are
-// averaged. Large (full-screen) and small (split-screen) text get separate templates.
+// glyphs and words (at wide gaps), each expected word is matched with a run of glyphs, and the glyphs
+// for each character are averaged. Large (full-screen) and small (split-screen) text get separate
+// templates. Small text can break a letter of "Position:" into pieces; such a label is skipped and only
+// its numbers are learned.
 // Also reports a leave-one-out check: each screenshot read with templates built without it.
 import fs from "node:fs";
 import jpeg from "jpeg-js";
@@ -22,15 +24,26 @@ for (const file of Object.keys(fixtures)) {
   lines.set(file, line);
 }
 
+/** Each expected character with its glyph: the label's only if it split into exactly its characters. */
+function labelled(file: string): [string, Glyph][] {
+  const [label, ...numbers] = fixtures[file].split(" "), line = lines.get(file)!;
+  const words: Glyph[][] = [];
+  line.glyphs.forEach((g, i) => (i === 0 || g.gap > 2 ? words.push([g]) : words.at(-1)!.push(g)));
+  const at = words.findIndex((_, k) => k > 0 && numbers.every((n, j) => words[k + j]?.length === n.length));
+  if (at < 0) throw new Error(`Can't match the numbers in ${file} with its glyphs`);
+  const pairs = (texts: string[], ws: Glyph[][]) => texts.flatMap((t, j) => [...t].map((ch, i): [string, Glyph] => [ch, ws[j][i]]));
+  const before = words.slice(0, at).flat();
+  return [...(before.length === label.length ? pairs([label], [before]) : []), ...pairs(numbers, words.slice(at, at + 3))];
+}
+
 function build(files: string[]): Template[] {
   const groups = new Map<string, Glyph[]>();
   for (const file of files) {
-    const chars = [...fixtures[file].replace(/ /g, "")], line = lines.get(file)!;
-    const size = line.y1 - line.y0 + 1 < 14 ? "small" : "large";
-    chars.forEach((ch, i) => {
+    const line = lines.get(file)!, size = line.y1 - line.y0 + 1 < 14 ? "small" : "large";
+    for (const [ch, g] of labelled(file)) {
       const k = `${ch}|${size}`;
-      groups.set(k, [...(groups.get(k) ?? []), line.glyphs[i]]);
-    });
+      groups.set(k, [...(groups.get(k) ?? []), g]);
+    }
   }
   return [...groups].map(([k, gs]) => ({
     ch: k.split("|")[0],
@@ -39,13 +52,13 @@ function build(files: string[]): Template[] {
   }));
 }
 
-const read = (line: Line, templates: Template[]) =>
-  line.glyphs.map((g) => templates.reduce((a, t) => (glyphDistance(g, t) < glyphDistance(g, a) ? t : a)).ch).join("");
+const read = (glyphs: Glyph[], templates: Template[]) =>
+  glyphs.map((g) => templates.reduce((a, t) => (glyphDistance(g, t) < glyphDistance(g, a) ? t : a)).ch).join("");
 
 let ok = 0;
 for (const file of Object.keys(fixtures)) {
-  const want = fixtures[file].replace(/ /g, "");
-  const got = read(lines.get(file)!, build(Object.keys(fixtures).filter((f) => f !== file))).slice(0, want.length);
+  const pairs = labelled(file), want = pairs.map(([ch]) => ch).join("");
+  const got = read(pairs.map(([, g]) => g), build(Object.keys(fixtures).filter((f) => f !== file)));
   if (got === want) ok++;
   else console.log(`leave-one-out miss: ${file.slice(0, 16)} read "${got}" expected "${want}"`);
 }

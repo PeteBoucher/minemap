@@ -26,10 +26,15 @@ describe("readPosition", () => {
   });
 });
 
+// Where the map is in fixtures that aren't demo maps (split-screen holds it in the left half).
+const NOT_IN_DEMO: Record<string, { x: number; y: number; size: number }> = {
+  "2026111819161400-11B64E28AD7A49CA9EC8AC007BE858C6.jpg": { x: 49, y: 60, size: 542 },
+};
+
 describe("detectCrop", () => {
   it.each(Object.keys(fixtures))("finds the held map in %s", (file) => {
     const m = DEMO_MAPS.find((d) => d.file === file);
-    expect(detectCrop(decode(file))?.crop).toEqual(m?.crop ?? SWITCH_CROP);
+    expect(detectCrop(decode(file))?.crop).toEqual(m?.crop ?? NOT_IN_DEMO[file] ?? SWITCH_CROP);
   });
 
   // Other devices and Java Edition hold the map elsewhere and at other sizes: move and shrink our

@@ -124,7 +124,9 @@ export function lineText(line: Line): string {
   }).join("").trim();
 }
 
-const POSITION = /^Position:\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)/;
+// The numbers after the label's colon. In split-screen the text is so small that blur can break the
+// letters of "Position" into pieces, so the label itself isn't required to read.
+const POSITION = /:\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)/;
 
 /** The player's position from a screenshot with "Show coordinates" on, or null if it can't be read. */
 export function readPosition(img: RGBAImage): Position | null {
