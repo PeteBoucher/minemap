@@ -44,7 +44,12 @@ export function openFeedback(): void {
   const form = h("form", { className: "fb" },
     h("fieldset", { className: "fb-kind" }, h("legend", { className: "sr" }, "Kind of feedback"), ...kinds),
     message, email,
-    h("p", { className: "note" }, "Your message, and your email if you give it, are stored in PostHog (EU) so we can read and reply. If you accepted analytics, it's linked to your visit to help us find bugs."),
+    h("p", { className: "note" },
+      "Your message, and your email if you give it, are stored in PostHog (EU) so we can read and reply. ",
+      currentConsent() === "granted"
+        ? "It's linked to your visit, so we can replay what happened."
+        // Nothing was recorded, so there's no replay of this problem; accepting now helps with the next report.
+        : "To let future reports include a replay of what happened, accept analytics under “Analytics & privacy” at the bottom of the page."),
     status,
     h("menu", {}, cancel, send));
 
