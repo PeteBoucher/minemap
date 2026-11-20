@@ -1,7 +1,11 @@
 // Audit trail for the unlock endpoints: one PostHog event per request, whatever the outcome.
 // Stripe stays the record of payments; this records which licences were issued or refused, and why.
 // Emails are never sent, only a SHA-256 hash, so the trail holds no personal data but can still
-// show one email being restored many times. Session ids link each event back to Stripe.
+// show one email being restored many times. Session ids link each event back to Stripe. A sale from a
+// visitor who accepted analytics is recorded under their visit, so it can be traced to the campaign that
+// brought them (docs/adr/0004-link-sales-to-visits.md).
+
+import type { Visit } from "../src/core/checkout";
 
 export interface AuditEnv {
   /** PostHog project API key (phc_…). Auditing is off when unset. */
@@ -19,6 +23,8 @@ export interface AuditEvent {
   result: AuditResult;
   session_id?: string;
   email_hash?: string;
+  /** The PostHog visit that started checkout (src/core/checkout.ts); the sale is recorded under it. */
+  visit?: Visit;
 }
 
 export async function hashEmail(email: string): Promise<string> {
@@ -30,7 +36,7 @@ export async function hashEmail(email: string): Promise<string> {
 export async function audit(env: AuditEnv, e: AuditEvent, fetchFn: typeof fetch = fetch): Promise<void> {
   if (!env.POSTHOG_KEY) return;
   const host = (env.POSTHOG_HOST || "https://eu.i.posthog.com").replace(/\/+$/, "");
-  const { event, ...props } = e;
+  const { event, visit, ...props } = e;
   try {
     await fetchFn(`${host}/i/v0/e/`, {
       method: "POST",
@@ -38,10 +44,11 @@ export async function audit(env: AuditEnv, e: AuditEvent, fetchFn: typeof fetch 
       body: JSON.stringify({
         api_key: env.POSTHOG_KEY,
         event,
-        distinct_id: e.session_id || e.email_hash || "anonymous",
+        distinct_id: visit?.distinct_id || e.session_id || e.email_hash || "anonymous",
         timestamp: new Date().toISOString(),
         properties: {
           ...props,
+          ...(visit && { $session_id: visit.session_id }),
           livemode: e.session_id ? e.session_id.startsWith("cs_live_") : undefined,
           deploy_env: env.VERCEL_ENV || "unknown",
           source: "minemap-api",

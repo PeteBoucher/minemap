@@ -16,6 +16,8 @@ export interface CheckoutSession {
   status: string;
   payment_status: string;
   payment_link: string | null;
+  /** Set by the app on the Payment Link URL for visitors who accepted analytics; see server/audit.ts. */
+  client_reference_id?: string | null;
   customer_details: { email: string | null } | null;
 }
 

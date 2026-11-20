@@ -127,7 +127,7 @@ Stripe is the record of payments, refunds and tax. With `POSTHOG_KEY` set, the e
 - **`license_unlock`:** `result` (`issued`, `refused`, `not_found`, `bad_input`, `not_configured`), `session_id`, `livemode`, `deploy_env` (`production`, `preview`; events from before 18 November 2026 don't have it).
 - **`license_restore`:** the same results plus `stripe_error`, with `email_hash` (SHA-256 of the lower-cased email, never the email itself) and, when issued, the `session_id` that was restored.
 
-The `session_id` links each event to the Checkout Session in Stripe, and `livemode` separates real sales from tests. Events are sent without person profiles. A PostHog outage never blocks an unlock: the event is just lost. Events take a minute or two to become queryable.
+The `session_id` links each event to the Checkout Session in Stripe, and `livemode` separates real sales from tests. When the buyer accepted analytics, the app passes their visit to Stripe as the Payment Link's `client_reference_id`. `license_unlock` is then recorded under that visitor's `distinct_id`, with the visit's `$session_id`, so PostHog can break sales down by campaign ([ADR 0004](adr/0004-link-sales-to-visits.md)). Otherwise `distinct_id` is the checkout id. Events are sent without person profiles. A PostHog outage never blocks an unlock: the event is just lost. Events take a minute or two to become queryable.
 
 Two saved queries are worth keeping in PostHog (*SQL editor → Save as insight*, then put both on a "Licence audit" dashboard):
 

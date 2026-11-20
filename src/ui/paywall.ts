@@ -1,6 +1,8 @@
 // The unlock dialog: shown when a free limit is reached, and after returning from payment.
+import { checkoutLink } from "../core/checkout";
 import { FREE, type LimitReason } from "../core/license";
 import { PAYMENT_LINK, claimSession, isUnlocked, restoreByEmail, unlockConfigured } from "../store/unlock";
+import { currentConsent, currentVisit } from "./analytics";
 import { h } from "./dom";
 
 const WHY: Record<LimitReason, string> = {
@@ -40,6 +42,11 @@ export async function requireUnlock(reason: LimitReason): Promise<boolean> {
       buy.setAttribute("aria-disabled", "true");
       buy.onclick = (e) => e.preventDefault();
       status.textContent = "Unlocking isn't set up on this copy of Minemap yet.";
+    } else {
+      // Visitors who accepted analytics take their visit to Stripe, so the sale can be traced to it (ADR 0004).
+      void currentVisit().then((visit) => { buy.href = checkoutLink(PAYMENT_LINK, visit); });
+      // Declined since the dialog opened: back to the plain link. auxclick covers middle-click and new-tab opens.
+      buy.onclick = buy.onauxclick = () => { if (currentConsent() !== "granted") buy.href = PAYMENT_LINK; };
     }
     restore.onsubmit = async (e) => {
       e.preventDefault();
