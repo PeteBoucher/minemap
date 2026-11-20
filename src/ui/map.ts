@@ -6,7 +6,7 @@ import { biomeCol } from "../core/biomes";
 import { placeLabels } from "../core/labels";
 import { SWITCH_CROP } from "../core/terrain";
 import { FRAME_H, FRAME_W } from "../import/image";
-import { type BiomePin, biomeAt } from "../core/travel";
+import { type BiomePin, biomeAt, reachCovers, reachOutline } from "../core/travel";
 import type { MapShot, Place } from "../store/db";
 
 const NS = "http://www.w3.org/2000/svg";
@@ -130,19 +130,21 @@ export class MapView {
     c.append(el("text", { y: 12, "text-anchor": "middle", "font-size": 9, style: "fill:var(--ink)" }, "N"));
     svg.append(c);
 
-    // one day's reach around the starting place: solid = one way, dashed = there and back
+    // one day's reach around the starting place: solid = one way, dashed = there and back. A shape
+    // that covers the whole view would only tint everything, so it's left out (zoom out to see it).
     const a = model.selA, b = model.selB;
     if (a && model.reach) {
-      const { full, half } = model.reach, cx0 = sx(a.x), cz0 = sz(a.z);
-      const shape = (rs: number[]) => rs.map((r, k) => {
-        const th = (k * 5 * Math.PI) / 180;
-        return `${k ? "L" : "M"}${(cx0 + Math.sin(th) * r * S).toFixed(1)},${(cz0 - Math.cos(th) * r * S).toFixed(1)}`;
-      }).join("") + "Z";
-      svg.append(el("path", { d: shape(full), fill: "var(--route)", "fill-opacity": 0.08, stroke: "var(--route)", "stroke-width": 1.5, "stroke-linejoin": "round" }));
-      svg.append(el("path", { d: shape(half), fill: "none", stroke: "var(--route)", "stroke-width": 1.2, "stroke-dasharray": "4 4", "stroke-linejoin": "round" }));
+      const { full, half } = model.reach, cx0 = sx(a.x), cz0 = sz(a.z), view = { x0, z0, span };
+      const shape = (rs: number[]) => reachOutline(rs, a).map((p, k) => `${k ? "L" : "M"}${sx(p.x).toFixed(1)},${sz(p.z).toFixed(1)}`).join("") + "Z";
       const lab = (y: number, t: string) => svg.append(el("text", { x: cx0, y, "text-anchor": "middle", "font-size": 10, style: "fill:var(--route);paint-order:stroke;stroke:var(--land);stroke-width:3px" }, t));
-      lab(cz0 - full[0] * S - 4, "1 day");
-      if (half[0] * S > 40) lab(cz0 - half[0] * S - 4, "there & back");
+      if (!reachCovers(full, a, view)) {
+        svg.append(el("path", { d: shape(full), fill: "var(--route)", "fill-opacity": 0.08, stroke: "var(--route)", "stroke-width": 1.5, "stroke-linejoin": "round" }));
+        lab(cz0 - full[0] * S - 4, "1 day");
+      }
+      if (!reachCovers(half, a, view)) {
+        svg.append(el("path", { d: shape(half), fill: "none", stroke: "var(--route)", "stroke-width": 1.2, "stroke-dasharray": "4 4", "stroke-linejoin": "round" }));
+        if (half[0] * S > 40) lab(cz0 - half[0] * S - 4, "there & back");
+      }
     }
     if (a && b) {
       svg.append(el("line", { x1: sx(a.x), y1: sz(a.z), x2: sx(b.x), y2: sz(b.z), stroke: "var(--route)", "stroke-width": 2.5, "stroke-dasharray": "6 4" }));
