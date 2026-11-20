@@ -3,7 +3,7 @@
 import { mapCorner, mapSize } from "../core/geo";
 import type { Crop } from "../core/terrain";
 import { type Analysis, analyzeScreenshot } from "../import/analyze";
-import type { RGBAImage } from "../import/image";
+import { FRAME_H, FRAME_W, type RGBAImage, frameRect } from "../import/image";
 import { h } from "./dom";
 
 export interface ImportHost {
@@ -17,19 +17,22 @@ export interface ImportHost {
 /** A screenshot drawn at 1280×720 (the size the importer and map drawing work in). */
 interface Shot { img: RGBAImage; blob: Blob; canvas: HTMLCanvasElement }
 
-async function toSwitchSize(file: File): Promise<Shot> {
+async function toFrame(file: File): Promise<Shot> {
   const bmp = await createImageBitmap(file);
-  if (Math.abs(bmp.width / bmp.height - 16 / 9) > 0.02) {
-    throw new Error("Only full-screen 16:9 game screenshots (like the Switch's) are supported for now.");
-  }
+  // Other shapes (Java Edition in a window, a 16:10 Mac screen) are fitted in without stretching,
+  // as fitToFrame does, so the map stays square.
+  const r = frameRect(bmp.width, bmp.height);
   const canvas = document.createElement("canvas");
-  canvas.width = 1280;
-  canvas.height = 720;
+  canvas.width = FRAME_W;
+  canvas.height = FRAME_H;
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-  ctx.drawImage(bmp, 0, 0, 1280, 720);
-  const img = ctx.getImageData(0, 0, 1280, 720);
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, FRAME_W, FRAME_H);
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(bmp, r.x, r.y, r.w, r.h);
+  const img = ctx.getImageData(0, 0, FRAME_W, FRAME_H);
   // keep the original file when it's already the right size, otherwise store the resized copy
-  const blob = bmp.width === 1280 && file.type === "image/jpeg"
+  const blob = bmp.width === FRAME_W && bmp.height === FRAME_H && file.type === "image/jpeg"
     ? file
     : await new Promise<Blob>((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("Couldn't encode image"))), "image/jpeg", 0.9));
   return { img, blob, canvas };
@@ -43,7 +46,7 @@ export async function importScreenshots(files: File[], host: ImportHost): Promis
   let added = 0;
   for (let i = 0; i < files.length; i++) {
     let shot: Shot | null = null, error = "";
-    try { shot = await toSwitchSize(files[i]); } catch (e) { error = (e as Error).message; }
+    try { shot = await toFrame(files[i]); } catch (e) { error = (e as Error).message; }
     const a = shot ? analyzeScreenshot(shot.img, host.lastScale()) : null;
     const result = await step(dlg, { index: i, total: files.length, name: files[i].name, shot, analysis: a, error, host });
     if (result === "cancel") break;

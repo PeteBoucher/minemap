@@ -14,7 +14,7 @@ export interface Analysis {
   placement: Placement | null;
 }
 
-/** `img` must be 1280×720 (see toSwitchSize in the UI). */
+/** `img` must be 1280×720: see fitToFrame (tests) and toFrame in the UI. */
 export function analyzeScreenshot(img: RGBAImage, fallbackScale: number): Analysis {
   const crop = detectCrop(img)?.crop ?? null;
   const position = readPosition(img);
