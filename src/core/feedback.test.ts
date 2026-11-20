@@ -41,8 +41,7 @@ describe("feedback form → PostHog survey response", () => {
 });
 
 describe("sending feedback", () => {
-  // Ticked "link to my visit": only honoured when analytics was accepted (there's no visit to link otherwise).
-  const bug = { kind: "Bug" as const, message: "Broken image", email: "", linkVisit: true };
+  const bug = { kind: "Bug" as const, message: "Broken image", email: "" };
 
   function fakes(consent: "granted" | "denied" | null, status = 200) {
     const captured: [string, Record<string, unknown>][] = [];
@@ -66,19 +65,11 @@ describe("sending feedback", () => {
     return { deps, captured, posted, sdkLoads: () => sdkLoads };
   }
 
-  it("with analytics accepted and the link box ticked, goes through PostHog so it's linked to the session", async () => {
+  it("with analytics accepted, goes through PostHog so it's linked to the session", async () => {
     const f = fakes("granted");
     expect(await sendFeedback(bug, f.deps)).toEqual({ ok: true });
     expect(f.captured).toEqual([["survey sent", expect.objectContaining({ $survey_id: "survey-1", "$survey_response_q-message": "Broken image" })]]);
     expect(f.posted).toEqual([]);
-  });
-
-  it("with analytics accepted but the link box left unticked, sends it anonymously without touching PostHog", async () => {
-    const f = fakes("granted");
-    expect(await sendFeedback({ ...bug, linkVisit: false }, f.deps)).toEqual({ ok: true });
-    expect(f.sdkLoads()).toBe(0);
-    expect(f.captured).toEqual([]);
-    expect(f.posted).toEqual([expect.objectContaining({ body: expect.objectContaining({ distinct_id: "anon-1" }) })]);
   });
 
   it.each(["denied", null] as const)("with analytics %s, sends one anonymous event without loading PostHog", async (consent) => {
