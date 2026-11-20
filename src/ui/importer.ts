@@ -109,7 +109,6 @@ function step(dlg: HTMLDialogElement, s: StepInput): Promise<"added" | "skipped"
       add.disabled = !c && !(savePlace.checked && pos && placeName.value.trim());
       add.textContent = c || crop ? "Add map" : "Save place";
       add.hidden = !crop && !pos; // nothing this screenshot can add
-      placeName.disabled = !savePlace.checked;
     }
 
     if (s.error) status.textContent = s.error;
@@ -127,6 +126,8 @@ function step(dlg: HTMLDialogElement, s: StepInput): Promise<"added" | "skipped"
     body.append(thumb, h("div", {}, status, fields));
 
     dlg.replaceChildren(h("form", { method: "dialog" }, title, h("p", { className: "fname" }, s.name), body, h("menu", {}, cancelAll, skip, add)));
+    // typing a name means saving the place: tick the box (it can still be unticked)
+    placeName.addEventListener("input", () => { if (placeName.value.trim()) savePlace.checked = true; });
     [scaleSel, sx, sz, savePlace, placeName].forEach((el) => el.addEventListener("input", refresh));
     refresh();
 
