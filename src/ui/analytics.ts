@@ -94,8 +94,8 @@ export const runningPostHog = (): Promise<PostHog | null> => (POSTHOG_KEY ? load
 /** This visit in PostHog, to link a purchase to it (ADR 0004); null unless the visitor accepted analytics. */
 export async function currentVisit(): Promise<Visit | null> {
   if (currentConsent() !== "granted") return null;
-  const ph = POSTHOG_KEY ? await load() : null;
-  if (!ph || currentConsent() !== "granted") return null;
+  const ph = await runningPostHog();
+  if (!ph || currentConsent() !== "granted") return null; // declined while the SDK was loading
   return { distinct_id: ph.get_distinct_id(), session_id: ph.get_session_id() };
 }
 

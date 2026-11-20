@@ -45,7 +45,8 @@ export async function requireUnlock(reason: LimitReason): Promise<boolean> {
     } else {
       // Visitors who accepted analytics take their visit to Stripe, so the sale can be traced to it (ADR 0004).
       void currentVisit().then((visit) => { buy.href = checkoutLink(PAYMENT_LINK, visit); });
-      buy.onclick = () => { if (currentConsent() !== "granted") buy.href = PAYMENT_LINK; }; // declined since opening
+      // Declined since the dialog opened: back to the plain link. auxclick covers middle-click and new-tab opens.
+      buy.onclick = buy.onauxclick = () => { if (currentConsent() !== "granted") buy.href = PAYMENT_LINK; };
     }
     restore.onsubmit = async (e) => {
       e.preventDefault();

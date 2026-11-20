@@ -8,8 +8,7 @@ import { type CheckoutSession, type Env, configured, isPaid, json, licenseFor, s
 export async function handleUnlock(request: Request, env: Env, fetchFn: typeof fetch = fetch): Promise<Response> {
   const sid = new URL(request.url).searchParams.get("session_id") ?? "";
   const valid = /^cs_(test|live)_[A-Za-z0-9]{10,200}$/.test(sid);
-  let visit: Visit | undefined;
-  const done = async (res: Response, result: AuditResult) => {
+  const done = async (res: Response, result: AuditResult, visit?: Visit) => {
     await audit(env, { event: "license_unlock", result, session_id: valid ? sid : undefined, visit }, fetchFn);
     return res;
   };
@@ -18,7 +17,7 @@ export async function handleUnlock(request: Request, env: Env, fetchFn: typeof f
   if (!valid) return done(json({ error: "Missing or invalid session_id." }, 400), "bad_input");
   const session = await stripeGet<CheckoutSession>(env, `checkout/sessions/${sid}`, fetchFn);
   if (!session) return done(json({ error: "Couldn't find that purchase." }, 404), "not_found");
-  visit = visitFromReference(session.client_reference_id);
   if (!isPaid(session, env)) return done(json({ error: "That purchase hasn't been paid." }, 402), "refused");
-  return done(json({ license: await licenseFor(session, env) }), "issued");
+  // A sale is recorded under the visit that started checkout, if the buyer accepted analytics (ADR 0004).
+  return done(json({ license: await licenseFor(session, env) }), "issued", visitFromReference(session.client_reference_id));
 }

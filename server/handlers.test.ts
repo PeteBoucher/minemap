@@ -121,6 +121,12 @@ describe("audit trail", () => {
     await unlock("cs_test_abcdefghijkl", ok.fetchFn, { ...env, ...audited });
     expect(ok.events[0]).toMatchObject({ distinct_id: visitor,
       properties: { result: "issued", session_id: "cs_test_abcdefghijkl", $session_id: visit, $process_person_profile: false } });
+
+    // Only a sale is attributed: a refused unlock stays under the checkout id.
+    const unpaid = withPostHog({ "checkout/sessions/": session({ payment_status: "unpaid", client_reference_id: `${visitor}_${visit}` }) });
+    await unlock("cs_test_abcdefghijkl", unpaid.fetchFn, { ...env, ...audited });
+    expect(unpaid.events[0]).toMatchObject({ distinct_id: "cs_test_abcdefghijkl", properties: { result: "refused" } });
+    expect(unpaid.events[0].properties).not.toHaveProperty("$session_id");
   });
 
   it("ignores a missing or tampered checkout reference", async () => {
