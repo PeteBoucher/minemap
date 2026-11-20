@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEMO_PLACES } from "../store/demoWorld";
 import golden from "./prototype.golden.json";
-import { type BiomePin, type Pace, type TravelCtx, DAYLIGHT, biomeAt, bpsAt, dayVerdict, reach, travel } from "./travel";
+import { type BiomePin, type Pace, type TravelCtx, DAYLIGHT, biomeAt, bpsAt, dayVerdict, reach, reachCovers, travel } from "./travel";
 
 const pins: BiomePin[] = DEMO_PLACES.filter((p) => p.biome).map((p) => ({ x: p.x, z: p.z, biome: p.biome! }));
 const P = DEMO_PLACES;
@@ -47,5 +47,31 @@ describe("dayVerdict", () => {
     expect(dayVerdict(9, 1600).level).toBe("warn");
     expect(dayVerdict(20, 3000)).toMatchObject({ level: "bad", days: 3 });
     expect(dayVerdict(20, 3000).text).toBe("Too far for one day · plan 3 days, a shelter every ~1,000 blocks");
+  });
+});
+
+describe("reachCovers", () => {
+  const view = { x0: -200, z0: -200, span: 400 }; // blocks -200..200 both ways
+  const round = (r: number) => Array(72).fill(r);
+
+  it("is true when a day's reach is bigger than the whole view", () => {
+    expect(reachCovers(round(1000), { x: 0, z: 0 }, view)).toBe(true);
+  });
+
+  it("is false when the view's corners are beyond the reach", () => {
+    // corners are 283 blocks from the middle
+    expect(reachCovers(round(250), { x: 0, z: 0 }, view)).toBe(false);
+  });
+
+  it("works for a starting place outside the view", () => {
+    // the furthest corner, (-200, ±200), is 728 blocks from (500, 0)
+    expect(reachCovers(round(1000), { x: 500, z: 0 }, view)).toBe(true);
+    expect(reachCovers(round(700), { x: 500, z: 0 }, view)).toBe(false);
+  });
+
+  it("is false when the reach falls short in one direction (slow terrain to the east)", () => {
+    const rs = round(1000);
+    for (let k = 15; k <= 21; k++) rs[k] = 100; // 75°–105°: east
+    expect(reachCovers(rs, { x: 0, z: 0 }, view)).toBe(false);
   });
 });

@@ -78,6 +78,40 @@ export function travel(ctx: TravelCtx, a: Point, b: Point): { secs: number; by: 
 /** Number of directions reach() samples (every 5°, index 0 = north, clockwise). */
 export const REACH_DIRS = 72;
 
+/** The outline of a reach (see reach()) around `a`, as world points, one per direction. */
+export function reachOutline(radii: number[], a: Point): Point[] {
+  return radii.map((r, k) => {
+    const th = (k * 360 / REACH_DIRS * Math.PI) / 180;
+    return { x: a.x + Math.sin(th) * r, z: a.z - Math.cos(th) * r };
+  });
+}
+
+/** Whether point p is inside the polygon (even-odd rule). */
+function inside(poly: Point[], p: Point): boolean {
+  let hit = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a.z > p.z) !== (b.z > p.z) && p.x < ((b.x - a.x) * (p.z - a.z)) / (b.z - a.z) + a.x) hit = !hit;
+  }
+  return hit;
+}
+
+/**
+ * Whether a reach around `a` covers the whole square view (x0, z0 to x0 + span, z0 + span): its
+ * edges all inside the outline, and no point of the outline inside it. Drawn then, the reach would
+ * only tint everything.
+ */
+export function reachCovers(radii: number[], a: Point, view: { x0: number; z0: number; span: number }): boolean {
+  const poly = reachOutline(radii, a), { x0, z0, span } = view, N = 64;
+  for (const q of poly) if (q.x > x0 && q.x < x0 + span && q.z > z0 && q.z < z0 + span) return false;
+  for (let i = 0; i <= N; i++) {
+    const t = x0 + (span * i) / N, u = z0 + (span * i) / N;
+    for (const p of [{ x: t, z: z0 }, { x: t, z: z0 + span }, { x: x0, z: u }, { x: x0 + span, z: u }])
+      if (!inside(poly, p)) return false;
+  }
+  return true;
+}
+
 /**
  * How far you get from `a` in each of 72 directions:
  * `full` in one day's daylight, `half` in half a day (there and back).
