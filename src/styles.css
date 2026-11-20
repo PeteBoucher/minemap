@@ -157,5 +157,7 @@ a.btn[aria-disabled=true]{opacity:.45;cursor:not-allowed}
 .fb-kind{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0;padding:0;border:0;color:var(--muted)}
 .fb textarea{font:inherit;font-size:.9rem;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);resize:vertical;min-height:90px}
 .fb .note{margin:0}
+.fb-link{display:flex;align-items:flex-start;gap:8px;color:var(--ink);font-size:.88rem}
+.fb-link input{margin:3px 0 0}
 .fb .status:empty{display:none}
 .fb menu{margin-top:4px}

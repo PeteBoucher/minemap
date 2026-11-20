@@ -38,13 +38,19 @@ export function openFeedback(): void {
   message.setAttribute("aria-label", "Message");
   const email = h("input", { type: "email", autocomplete: "email", placeholder: "Email (optional, if you'd like a reply)" });
   email.setAttribute("aria-label", "Email (optional)");
+  // Only a visitor who accepted analytics has a recorded visit to link; for anyone else there's nothing to offer.
+  const canLink = currentConsent() === "granted";
+  const linkBox = h("input", { type: "checkbox" });
+  const link = canLink
+    ? h("label", { className: "fb-link" }, linkBox, " Link this to my visit, so the developer can replay what happened")
+    : "";
   const status = h("p", { className: "status", role: "status" });
   const cancel = h("button", { type: "button", className: "btn ghost", textContent: "Cancel" });
   const send = h("button", { type: "submit", className: "btn", textContent: "Send" });
   const form = h("form", { className: "fb" },
     h("fieldset", { className: "fb-kind" }, h("legend", { className: "sr" }, "Kind of feedback"), ...kinds),
-    message, email,
-    h("p", { className: "note" }, "Your message, and your email if you give it, are stored in PostHog (EU) so we can read and reply. If you accepted analytics, it's linked to your visit to help us find bugs."),
+    message, email, link,
+    h("p", { className: "note" }, "Your message, and your email if you give it, are stored in PostHog (EU) so we can read and reply.", canLink ? " It's only linked to your visit if you tick the box." : ""),
     status,
     h("menu", {}, cancel, send));
 
@@ -54,7 +60,7 @@ export function openFeedback(): void {
     send.disabled = true;
     status.textContent = "Sending…";
     const kind = (form.querySelector<HTMLInputElement>("input[name=fbKind]:checked")?.value ?? "Other") as FeedbackKind;
-    const r = await sendFeedback({ kind, message: message.value, email: email.value }, {
+    const r = await sendFeedback({ kind, message: message.value, email: email.value, linkVisit: canLink && linkBox.checked }, {
       consent: currentConsent(),
       survey: SURVEY,
       ...posthogTarget,

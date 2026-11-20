@@ -7,6 +7,8 @@ export interface FeedbackInput {
   kind: FeedbackKind;
   message: string;
   email: string;
+  /** The visitor ticked "link this to my visit". Only possible when they accepted analytics. */
+  linkVisit: boolean;
 }
 
 interface Question { id: string; question: string }
@@ -35,14 +37,14 @@ export interface SendDeps {
 export async function sendFeedback(input: FeedbackInput, deps: SendDeps): Promise<{ ok: true } | { ok: false; error: string }> {
   const r = surveyResponse(input, deps.survey);
   if (!r.ok) return r;
-  if (deps.consent === "granted") {
+  if (deps.consent === "granted" && input.linkVisit) {
     const ph = await deps.posthog().catch(() => null);
     if (ph) {
       ph.capture("survey sent", r.properties);
       return { ok: true };
     }
   }
-  // No consent (or the SDK couldn't load): one event straight to the capture endpoint, under a throwaway id with no person profile.
+  // Not linked (no consent, box unticked, or the SDK couldn't load): one event straight to the capture endpoint, under a throwaway id with no person profile.
   // The SDK isn't loaded, so nothing is stored and the response isn't linked to any visit (ADR 0002).
   const res = await deps
     .fetch(`${deps.host}/i/v0/e/`, {
@@ -59,7 +61,7 @@ export async function sendFeedback(input: FeedbackInput, deps: SendDeps): Promis
   return res?.ok ? { ok: true } : { ok: false, error: "Couldn't send your feedback. Check your connection and try again." };
 }
 
-export function surveyResponse(input: FeedbackInput, survey: FeedbackSurvey): SurveyResponse {
+export function surveyResponse(input: Omit<FeedbackInput, "linkVisit">, survey: FeedbackSurvey): SurveyResponse {
   const msg = input.message.trim();
   if (!msg) return { ok: false, error: "Please write a message." };
   const email = input.email.trim();
