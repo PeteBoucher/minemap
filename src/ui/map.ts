@@ -5,6 +5,7 @@ import { PageDrag, dragAction } from "../core/pageDrag";
 import { biomeCol } from "../core/biomes";
 import { placeLabels } from "../core/labels";
 import { SWITCH_CROP } from "../core/terrain";
+import { FRAME_H, FRAME_W } from "../import/image";
 import { type BiomePin, biomeAt } from "../core/travel";
 import type { MapShot, Place } from "../store/db";
 
@@ -104,7 +105,7 @@ export class MapView {
         cp.append(el("rect", { x: C.x, y: C.y, width: C.size, height: C.size }));
         svg.append(cp);
         svg.append(el("image", {
-          href, width: 1280, height: 720, "clip-path": `url(#mapCrop${i})`, style: "image-rendering:pixelated",
+          href, width: FRAME_W, height: FRAME_H, "clip-path": `url(#mapCrop${i})`, style: "image-rendering:pixelated",
           transform: `translate(${sx(m.x)},${sz(m.z)}) scale(${(m.size * S) / C.size}) translate(${-C.x},${-C.y})`,
         }));
       });

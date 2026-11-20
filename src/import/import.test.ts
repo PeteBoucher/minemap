@@ -5,9 +5,8 @@ import { type Crop, SWITCH_CROP } from "../core/terrain";
 import { DEMO_MAPS } from "../store/demoWorld";
 import { analyzeScreenshot } from "./analyze";
 import { detectCrop } from "./crop";
-import { fitToFrame } from "./image";
 import fixtures from "./ocr.fixtures.json";
-import { positionFromText, readPosition } from "./ocr";
+import { type Position, positionFromText, readPosition } from "./ocr";
 import { checkScales, placeFromPosition } from "./place";
 
 const read = (path: string) => jpeg.decode(fs.readFileSync(new URL(path, import.meta.url)), { useTArray: true, maxMemoryUsageInMB: 1024 });
@@ -77,7 +76,9 @@ describe("detectCrop", () => {
 describe("analyzeScreenshot", () => {
   it("reads, finds and places a locator map in one go", () => {
     const file = DEMO_MAPS.find((m) => m.file.startsWith("2026102414202700"))!;
-    expect(analyzeScreenshot(decode(file.file), 0)).toEqual({
+    const { frame, ...rest } = analyzeScreenshot(decode(file.file), 0);
+    expect([frame.width, frame.height]).toEqual([1280, 720]);
+    expect(rest).toEqual({
       crop: SWITCH_CROP,
       position: { x: 796, y: 78, z: 1676 },
       placement: { x: -64, z: -64, size: 2048, basis: "marker" },
@@ -109,36 +110,52 @@ describe("placement", () => {
   });
 });
 
-// Real Java Edition screenshots from a Mac (3024×1898, about 16:10), fitted into the frame. Map
-// squares measured by hand from the fitted frames. View bobbing moves the map down in 14.03.*; in
-// 14.04.* looking further down holds it lower and smaller, and its unexplored corner is parchment.
-// Measuring on fitToFrame's output is safe: image.test.ts pins its geometry with plain arithmetic.
-const JAVA: Record<string, Crop> = {
-  "2026-11-20_14.00.44.jpg": { x: 368, y: 59.5, size: 543 }, // F3 open
-  "2026-11-20_14.01.00.jpg": { x: 368, y: 59.5, size: 543 }, // F3
-  "2026-11-20_14.01.10.jpg": { x: 368, y: 59.5, size: 543 }, // "Saved screenshot" chat line over the map
-  "2026-11-20_14.03.39.jpg": { x: 368, y: 61.5, size: 543 },
-  "2026-11-20_14.03.41.jpg": { x: 368, y: 61.5, size: 543 }, // F3, chat line
-  "2026-11-20_14.04.33.jpg": { x: 369.5, y: 67.5, size: 539 }, // F3, chat line
-  "2026-11-20_14.04.36.jpg": { x: 369.5, y: 67.5, size: 539 }, // chat line
-  "2026-11-20_14.07.04.jpg": { x: 368, y: 59.5, size: 543 },
-  "2026-11-20_14.07.09.jpg": { x: 368, y: 59.5, size: 543 }, // F3, chat line
-  "2026-11-20_14.08.54.jpg": { x: 368, y: 59.5, size: 543 }, // in shade: the frame is grey-purple
-  "2026-11-20_14.08.55.jpg": { x: 368, y: 59.5, size: 543 }, // in shade, chat line
+// Real Java Edition screenshots from a Mac (3024×1898, about 16:10). Map squares measured by hand
+// from the fitted frames. View bobbing moves the map down in 14.03.*; in 14.04.* looking further
+// down holds it lower and smaller, and its unexplored corner is parchment. Measuring on
+// fitToFrame's output is safe: image.test.ts pins its geometry with plain arithmetic.
+// `block` is the F3 screen's "Block: x y z" line, read by eye at full size (null: F3 was off).
+const JAVA: Record<string, { crop: Crop; block: Position | null }> = {
+  "2026-11-20_14.00.44.jpg": { crop: { x: 368, y: 59.5, size: 543 }, block: { x: 1, y: 84, z: 3 } },
+  "2026-11-20_14.01.00.jpg": { crop: { x: 368, y: 59.5, size: 543 }, block: { x: 1, y: 84, z: 3 } },
+  "2026-11-20_14.01.10.jpg": { crop: { x: 368, y: 59.5, size: 543 }, block: null }, // "Saved screenshot" chat line over the map
+  "2026-11-20_14.03.39.jpg": { crop: { x: 368, y: 61.5, size: 543 }, block: null },
+  "2026-11-20_14.03.41.jpg": { crop: { x: 368, y: 61.5, size: 543 }, block: { x: -14, y: 63, z: 83 } }, // chat line; F3 over bright water
+  "2026-11-20_14.04.33.jpg": { crop: { x: 369.5, y: 67.5, size: 539 }, block: { x: 54, y: 63, z: 219 } }, // F3 over bright water
+  "2026-11-20_14.04.36.jpg": { crop: { x: 369.5, y: 67.5, size: 539 }, block: null }, // chat line
+  "2026-11-20_14.07.04.jpg": { crop: { x: 368, y: 59.5, size: 543 }, block: null },
+  "2026-11-20_14.07.09.jpg": { crop: { x: 368, y: 59.5, size: 543 }, block: { x: 44, y: 95, z: 51 } }, // chat line
+  "2026-11-20_14.08.54.jpg": { crop: { x: 368, y: 59.5, size: 543 }, block: { x: -85, y: 72, z: 2 } }, // in shade: the frame is grey-purple
+  "2026-11-20_14.08.55.jpg": { crop: { x: 368, y: 59.5, size: 543 }, block: null }, // in shade, chat line
 };
-const decodeJava = (file: string) => fitToFrame(read(`./fixtures/java/${file}`));
+const readJava = (file: string) => read(`./fixtures/java/${file}`);
 /** Half a map pixel: 543 / 128 ≈ 4.2 frame pixels per map pixel. */
 const HALF_MAP_PX = 2;
 
 describe("Java Edition screenshots", () => {
-  it.each(Object.entries(JAVA))("finds the held map in %s", (file, want) => {
-    const got = detectCrop(decodeJava(file))?.crop;
-    expect(got).toBeDefined();
-    for (const k of ["x", "y", "size"] as const) expect(Math.abs(got![k] - want[k])).toBeLessThanOrEqual(HALF_MAP_PX);
+  it.each(Object.entries(JAVA))("finds the held map in %s", (file, { crop: want }) => {
+    const a = analyzeScreenshot(readJava(file), 0);
+    expect([a.frame.width, a.frame.height]).toEqual([1280, 720]);
+    expect(a.crop).not.toBeNull();
+    for (const k of ["x", "y", "size"] as const) expect(Math.abs(a.crop![k] - want[k])).toBeLessThanOrEqual(HALF_MAP_PX);
+  });
+
+  it.each(Object.entries(JAVA))("reads the F3 screen's block coordinates in %s", (file, { block }) => {
+    expect(analyzeScreenshot(readJava(file), 0).position).toEqual(block);
+  });
+
+  it("reads the F3 coordinates at another window size (1920×1200)", () => {
+    expect(analyzeScreenshot(readJava("2026-11-20_13.43.40.jpg"), 0).position).toEqual({ x: -7, y: 62, z: 72 });
+  });
+
+  it("finds the map in a 32:9 screenshot as in a 16:9 one", () => {
+    // a Switch screenshot with scenery-grey added on both sides: 2560×720
+    const src = decode(DEMO_MAPS[0].file), W = 2560, data = new Uint8Array(W * 720 * 4).fill(90);
+    for (let y = 0; y < 720; y++) data.set(src.data.subarray(y * 1280 * 4, (y + 1) * 1280 * 4), (y * W + 640) * 4);
+    expect(analyzeScreenshot({ width: W, height: 720, data }, 0).crop).toEqual(DEMO_MAPS[0].crop ?? SWITCH_CROP);
   });
 
   it("finds no map in a 1920×1200 screenshot with F3 open and a sword in hand", () => {
-    // sand, an oak plank floor and F3 text: parchment-ish colours, but no frame
-    expect(detectCrop(decodeJava("2026-11-20_13.43.40.jpg"))).toBeNull();
+    expect(analyzeScreenshot(readJava("2026-11-20_13.43.40.jpg"), 0).crop).toBeNull();
   });
 });
