@@ -16,9 +16,12 @@ export const CROP_CANDIDATES: { name: string; crop: Crop }[] = [
 
 type RGB = [number, number, number];
 
-/** Parchment tint of the map's frame: red > green > blue in fixed proportions, at any brightness. */
+/**
+ * Parchment tint of the map's frame: red > green > blue in fixed proportions, at any brightness.
+ * Blue gets a wide margin: in shade Java Edition lights the frame bluish, about (115, 102, 107).
+ */
 function isParchment([r, g, b]: RGB): boolean {
-  return r > 60 && g / r > 0.76 && g / r < 0.93 && b / r > 0.45 && b / r < 0.82;
+  return r > 60 && g / r > 0.76 && g / r < 0.93 && b / r > 0.45 && b / r < 0.97;
 }
 
 /** Rows below this are often covered by the hotbar, so the frame's bottom edge is never used. */
