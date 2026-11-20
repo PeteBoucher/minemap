@@ -5,12 +5,13 @@ import { type Crop, SWITCH_CROP } from "../core/terrain";
 import { DEMO_MAPS } from "../store/demoWorld";
 import { analyzeScreenshot } from "./analyze";
 import { detectCrop } from "./crop";
-import fixtures from "./ocr.fixtures.json";
 import { fitToFrame } from "./image";
+import fixtures from "./ocr.fixtures.json";
 import { positionFromText, readPosition } from "./ocr";
 import { checkScales, placeFromPosition } from "./place";
 
-const decode = (file: string) => jpeg.decode(fs.readFileSync(new URL(`../../public/demo/${file}`, import.meta.url)), { useTArray: true });
+const read = (path: string) => jpeg.decode(fs.readFileSync(new URL(path, import.meta.url)), { useTArray: true, maxMemoryUsageInMB: 1024 });
+const decode = (file: string) => read(`../../public/demo/${file}`);
 const expected = (file: string) => {
   const [x, y, z] = (fixtures as Record<string, string>)[file].match(/-?\d+/g)!.map(Number);
   return { x, y, z };
@@ -111,6 +112,7 @@ describe("placement", () => {
 // Real Java Edition screenshots from a Mac (3024×1898, about 16:10), fitted into the frame. Map
 // squares measured by hand from the fitted frames. View bobbing moves the map down in 14.03.*; in
 // 14.04.* looking further down holds it lower and smaller, and its unexplored corner is parchment.
+// Measuring on fitToFrame's output is safe: image.test.ts pins its geometry with plain arithmetic.
 const JAVA: Record<string, Crop> = {
   "2026-11-20_14.00.44.jpg": { x: 368, y: 59.5, size: 543 }, // F3 open
   "2026-11-20_14.01.00.jpg": { x: 368, y: 59.5, size: 543 }, // F3
@@ -124,16 +126,19 @@ const JAVA: Record<string, Crop> = {
   "2026-11-20_14.08.54.jpg": { x: 368, y: 59.5, size: 543 }, // in shade: the frame is grey-purple
   "2026-11-20_14.08.55.jpg": { x: 368, y: 59.5, size: 543 }, // in shade, chat line
 };
-const decodeJava = (file: string) =>
-  fitToFrame(jpeg.decode(fs.readFileSync(new URL(`./fixtures/java/${file}`, import.meta.url)), { useTArray: true, maxMemoryUsageInMB: 1024 }));
+const decodeJava = (file: string) => fitToFrame(read(`./fixtures/java/${file}`));
+/** Half a map pixel: 543 / 128 ≈ 4.2 frame pixels per map pixel. */
+const HALF_MAP_PX = 2;
 
 describe("Java Edition screenshots", () => {
   it.each(Object.entries(JAVA))("finds the held map in %s", (file, want) => {
     const got = detectCrop(decodeJava(file))?.crop;
     expect(got).toBeDefined();
-    // within half a map pixel (543 / 128 ≈ 4.2 frame pixels per map pixel)
-    expect(Math.abs(got!.x - want.x)).toBeLessThanOrEqual(2);
-    expect(Math.abs(got!.y - want.y)).toBeLessThanOrEqual(2);
-    expect(Math.abs(got!.size - want.size)).toBeLessThanOrEqual(2);
+    for (const k of ["x", "y", "size"] as const) expect(Math.abs(got![k] - want[k])).toBeLessThanOrEqual(HALF_MAP_PX);
+  });
+
+  it("finds no map in a 1920×1200 screenshot with F3 open and a sword in hand", () => {
+    // sand, an oak plank floor and F3 text: parchment-ish colours, but no frame
+    expect(detectCrop(decodeJava("2026-11-20_13.43.40.jpg"))).toBeNull();
   });
 });
