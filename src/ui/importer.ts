@@ -6,7 +6,7 @@ import type { Crop } from "../core/terrain";
 import { type Analysis, analyzeScreenshot } from "../import/analyze";
 import type { RGBAImage } from "../import/image";
 import { h } from "./dom";
-import { howToContent } from "./howto";
+import { type HowTo, howToContent } from "./howto";
 
 export interface ImportHost {
   /** Zoom level to assume when it can't be detected (the last one the user chose). */
@@ -111,12 +111,14 @@ function step(dlg: HTMLDialogElement, s: StepInput): Promise<"added" | "skipped"
       add.hidden = !crop && !pos; // nothing this screenshot can add
     }
 
+    // an instruction with the edition toggle; switching it updates the world and redraws the text
+    const howto = (which: HowTo, after = "") => {
+      const show = (e: Edition) => status.replaceChildren(...howToContent(which, e, (n) => { host.setEdition(n); show(n); }), after);
+      show(host.edition());
+    };
     if (s.error) status.textContent = s.error;
-    else if (!crop) status.textContent = "This doesn't look like a screenshot of a map held in your hand." + (pos ? " You can still save where you were standing." : "");
-    else if (!pos) {
-      const unread = (e: Edition) => status.replaceChildren(...howToContent("unread", e, (n) => { host.setEdition(n); unread(n); }));
-      unread(host.edition());
-    }
+    else if (!crop) howto("nomap", pos ? " You can still save where you were standing." : "");
+    else if (!pos) howto("unread");
     else if (placement?.basis === "marker") status.textContent = `Read your position (${nf(pos.x)}, ${nf(pos.z)}) and found your marker on the map, so it's placed exactly and the zoom level is set for you.`;
     else status.textContent = `Read your position (${nf(pos.x)}, ${nf(pos.z)}). Placed assuming you were standing on this map — check the zoom level. If the map shows somewhere else, type a spot that's on it.`;
 

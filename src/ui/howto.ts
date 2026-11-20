@@ -16,6 +16,11 @@ const HOWTO = {
     bedrock: "Hold a map in game with “Show coordinates” on and take a screenshot. Minemap reads where you were and lines the map up for you.",
     java: "Hold a map in game with F3 open and take a screenshot (F2). Minemap reads where you were and lines the map up for you.",
   },
+  /** In the import dialog, when no held map was found: how to retake the screenshot. */
+  nomap: {
+    bedrock: "This doesn't look like a screenshot of a map held in your hand. Hold the map so it faces you squarely in the middle of the screen, ideally in daylight, and take it again.",
+    java: "This doesn't look like a screenshot of a map held in your hand. Look further down so the map faces you squarely (the second number on F3's “Facing” line at about 70 or more), ideally in daylight, and take it again.",
+  },
   /** In the import dialog, when a map was found but no coordinates. */
   unread: {
     bedrock: "Found the map, but couldn't read any coordinates. Type any spot that's on this map. Next time, turn on “Show coordinates” in your world settings and Minemap will read them for you.",
