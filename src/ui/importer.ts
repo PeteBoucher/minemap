@@ -6,7 +6,7 @@ import type { Crop } from "../core/terrain";
 import { type Analysis, analyzeScreenshot } from "../import/analyze";
 import type { RGBAImage } from "../import/image";
 import { h } from "./dom";
-import { howToContent } from "./howto";
+import { type HowTo, howToContent } from "./howto";
 
 export interface ImportHost {
   /** Zoom level to assume when it can't be detected (the last one the user chose). */
@@ -109,15 +109,16 @@ function step(dlg: HTMLDialogElement, s: StepInput): Promise<"added" | "skipped"
       add.disabled = !c && !(savePlace.checked && pos && placeName.value.trim());
       add.textContent = c || crop ? "Add map" : "Save place";
       add.hidden = !crop && !pos; // nothing this screenshot can add
-      placeName.disabled = !savePlace.checked;
     }
 
+    // an instruction with the edition toggle; switching it updates the world and redraws the text
+    const howto = (which: HowTo, after = "") => {
+      const show = (e: Edition) => status.replaceChildren(...howToContent(which, e, (n) => { host.setEdition(n); show(n); }), after);
+      show(host.edition());
+    };
     if (s.error) status.textContent = s.error;
-    else if (!crop) status.textContent = "This doesn't look like a screenshot of a map held in your hand." + (pos ? " You can still save where you were standing." : "");
-    else if (!pos) {
-      const unread = (e: Edition) => status.replaceChildren(...howToContent("unread", e, (n) => { host.setEdition(n); unread(n); }));
-      unread(host.edition());
-    }
+    else if (!crop) howto("nomap", pos ? " You can still save where you were standing." : "");
+    else if (!pos) howto("unread");
     else if (placement?.basis === "marker") status.textContent = `Read your position (${nf(pos.x)}, ${nf(pos.z)}) and found your marker on the map, so it's placed exactly and the zoom level is set for you.`;
     else status.textContent = `Read your position (${nf(pos.x)}, ${nf(pos.z)}). Placed assuming you were standing on this map — check the zoom level. If the map shows somewhere else, type a spot that's on it.`;
 
@@ -127,6 +128,8 @@ function step(dlg: HTMLDialogElement, s: StepInput): Promise<"added" | "skipped"
     body.append(thumb, h("div", {}, status, fields));
 
     dlg.replaceChildren(h("form", { method: "dialog" }, title, h("p", { className: "fname" }, s.name), body, h("menu", {}, cancelAll, skip, add)));
+    // typing a name means saving the place: tick the box (it can still be unticked)
+    placeName.addEventListener("input", () => { if (placeName.value.trim()) savePlace.checked = true; });
     [scaleSel, sx, sz, savePlace, placeName].forEach((el) => el.addEventListener("input", refresh));
     refresh();
 
