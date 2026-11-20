@@ -7,6 +7,7 @@
 //   "img:<id>"        Blob of a map screenshot
 // Lists are small (hundreds of items), so whole-array read-modify-write with update() is fine.
 import { del, delMany, get, set, update } from "idb-keyval";
+import type { Edition } from "../core/edition";
 import type { Crop } from "../core/terrain";
 import type { Pace } from "../core/travel";
 
@@ -19,6 +20,8 @@ export interface WorldSettings {
   platform: Platform;
   /** Zoom level last chosen when importing a map screenshot (0–4). */
   lastScale?: number;
+  /** Bedrock or Java, for in-game instructions; unset means Bedrock. */
+  edition?: Edition;
 }
 export interface World { id: string; name: string; createdAt: number; settings: WorldSettings }
 export interface Place { id: string; worldId: string; name: string; x: number; z: number; kind: PlaceKind; biome?: string; note?: string }

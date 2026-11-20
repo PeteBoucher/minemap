@@ -158,3 +158,9 @@ a.btn[aria-disabled=true]{opacity:.45;cursor:not-allowed}
 .fb .note{margin:0}
 .fb .status:empty{display:none}
 .fb menu{margin-top:4px}
+/* Bedrock | Java switch beside in-game instructions */
+.edition{display:inline-flex;vertical-align:baseline;border:1px solid var(--line);border-radius:4px;overflow:hidden;margin-right:4px}
+.edition button{font:inherit;font-size:.78rem;padding:1px 8px;border:0;background:transparent;color:var(--muted);cursor:pointer}
+.edition button+button{border-left:1px solid var(--line)}
+.edition button[aria-pressed="true"]{background:var(--accent);color:var(--panel);font-weight:600}
+.edition button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}

@@ -2,7 +2,9 @@
 import { biomeCol } from "../core/biomes";
 import { coordsText, dirName, toNether, yaw } from "../core/geo";
 import { DAYLIGHT, PACES, type Pace, STEP, type TravelCtx, dayVerdict, travel } from "../core/travel";
+import type { Edition } from "../core/edition";
 import type { Place } from "../store/db";
+import { howToContent } from "./howto";
 
 const nf = (v: number) => Math.round(v).toLocaleString("en-GB");
 const KIND_ORDER = { place: 0, portal: 1, village: 2 } as const;
@@ -11,6 +13,9 @@ export interface ListHandlers {
   pick: (id: string) => void;
   edit: (p: Place) => void;
   remove: (p: Place) => void;
+  /** Shown with the instructions when there are no places yet. */
+  edition: Edition;
+  setEdition: (e: Edition) => void;
 }
 
 export function renderList(L: HTMLElement, places: Place[], selA: Place | undefined, selB: Place | undefined, h: ListHandlers): void {
@@ -18,7 +23,7 @@ export function renderList(L: HTMLElement, places: Place[], selA: Place | undefi
   if (!places.length) {
     const p = document.createElement("p");
     p.className = "hint";
-    p.textContent = "No places yet. Turn on “Show coordinates” in your world settings, then add where you are below.";
+    p.append(...howToContent("places", h.edition, h.setEdition));
     L.append(p);
     return;
   }

@@ -1,10 +1,12 @@
 // Screenshot import dialog: one step per screenshot. Shows the map found in the screenshot, what was
 // read from it, and where it will go; the user confirms, adjusts the zoom level or spot, or skips.
+import type { Edition } from "../core/edition";
 import { mapCorner, mapSize } from "../core/geo";
 import type { Crop } from "../core/terrain";
 import { type Analysis, analyzeScreenshot } from "../import/analyze";
-import { FRAME_H, FRAME_W, type RGBAImage, frameRect } from "../import/image";
+import type { RGBAImage } from "../import/image";
 import { h } from "./dom";
+import { howToContent } from "./howto";
 
 export interface ImportHost {
   /** Zoom level to assume when it can't be detected (the last one the user chose). */
@@ -12,30 +14,37 @@ export interface ImportHost {
   setLastScale(scale: number): void;
   addMap(map: { x: number; z: number; size: number; crop: Crop }, image: Blob): Promise<void>;
   addPlace(place: { name: string; x: number; z: number }): Promise<void>;
+  /** The world's edition, for instructions; set from a screenshot whose coordinates were read. */
+  edition(): Edition;
+  setEdition(edition: Edition): void;
 }
 
-/** A screenshot drawn at 1280×720 (the size the importer and map drawing work in). */
-interface Shot { img: RGBAImage; blob: Blob; canvas: HTMLCanvasElement }
+/** The screenshot fitted into the 1280×720 frame (the size the importer and map drawing work in). */
+interface Shot { blob: Blob; canvas: HTMLCanvasElement }
 
-async function toFrame(file: File): Promise<Shot> {
+/** The screenshot's pixels at full size: coordinates are read from these before it's shrunk. */
+async function readPixels(file: File): Promise<ImageData> {
   const bmp = await createImageBitmap(file);
-  // Other shapes (Java Edition in a window, a 16:10 Mac screen) are fitted in without stretching,
-  // as fitToFrame does, so the map stays square.
-  const r = frameRect(bmp.width, bmp.height);
   const canvas = document.createElement("canvas");
-  canvas.width = FRAME_W;
-  canvas.height = FRAME_H;
+  canvas.width = bmp.width;
+  canvas.height = bmp.height;
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-  ctx.fillStyle = "#000";
-  ctx.fillRect(0, 0, FRAME_W, FRAME_H);
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(bmp, r.x, r.y, r.w, r.h);
-  const img = ctx.getImageData(0, 0, FRAME_W, FRAME_H);
-  // keep the original file when it's already the right size, otherwise store the resized copy
-  const blob = bmp.width === FRAME_W && bmp.height === FRAME_H && file.type === "image/jpeg"
+  ctx.drawImage(bmp, 0, 0);
+  return ctx.getImageData(0, 0, bmp.width, bmp.height);
+}
+
+/** Draw the analysed frame onto a canvas and encode it for storage. */
+async function toShot(file: File, original: ImageData, frame: RGBAImage): Promise<Shot> {
+  const canvas = document.createElement("canvas");
+  canvas.width = frame.width;
+  canvas.height = frame.height;
+  const data = new Uint8ClampedArray(frame.data);
+  canvas.getContext("2d")!.putImageData(new ImageData(data, frame.width, frame.height), 0, 0);
+  // keep the original file when it's already the frame's size, otherwise store the fitted copy
+  const blob = original.width === frame.width && original.height === frame.height && file.type === "image/jpeg"
     ? file
     : await new Promise<Blob>((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("Couldn't encode image"))), "image/jpeg", 0.9));
-  return { img, blob, canvas };
+  return { blob, canvas };
 }
 
 const nf = (v: number) => v.toLocaleString("en-GB");
@@ -45,9 +54,13 @@ export async function importScreenshots(files: File[], host: ImportHost): Promis
   const dlg = document.getElementById("importDlg") as HTMLDialogElement;
   let added = 0;
   for (let i = 0; i < files.length; i++) {
-    let shot: Shot | null = null, error = "";
-    try { shot = await toFrame(files[i]); } catch (e) { error = (e as Error).message; }
-    const a = shot ? analyzeScreenshot(shot.img, host.lastScale()) : null;
+    let shot: Shot | null = null, a: Analysis | null = null, error = "";
+    try {
+      const original = await readPixels(files[i]);
+      a = analyzeScreenshot(original, host.lastScale());
+      if (a.edition) host.setEdition(a.edition);
+      shot = await toShot(files[i], original, a.frame);
+    } catch (e) { error = (e as Error).message; }
     const result = await step(dlg, { index: i, total: files.length, name: files[i].name, shot, analysis: a, error, host });
     if (result === "cancel") break;
     if (result === "added") added++;
@@ -101,7 +114,10 @@ function step(dlg: HTMLDialogElement, s: StepInput): Promise<"added" | "skipped"
 
     if (s.error) status.textContent = s.error;
     else if (!crop) status.textContent = "This doesn't look like a screenshot of a map held in your hand." + (pos ? " You can still save where you were standing." : "");
-    else if (!pos) status.textContent = "Found the map, but couldn't read any coordinates. Type any spot that's on this map. (In Bedrock Edition, “Show coordinates” in your world settings puts them on screen for Minemap to read.)";
+    else if (!pos) {
+      const unread = (e: Edition) => status.replaceChildren(...howToContent("unread", e, (n) => { host.setEdition(n); unread(n); }));
+      unread(host.edition());
+    }
     else if (placement?.basis === "marker") status.textContent = `Read your position (${nf(pos.x)}, ${nf(pos.z)}) and found your marker on the map, so it's placed exactly and the zoom level is set for you.`;
     else status.textContent = `Read your position (${nf(pos.x)}, ${nf(pos.z)}). Placed assuming you were standing on this map — check the zoom level. If the map shows somewhere else, type a spot that's on it.`;
 

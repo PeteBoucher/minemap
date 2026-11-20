@@ -1,5 +1,6 @@
 import "./styles.css";
 import { BIOMES } from "./core/biomes";
+import type { Edition } from "./core/edition";
 import { FREE, freeLeft } from "./core/license";
 import { type Pace, type TravelCtx, reach } from "./core/travel";
 import {
@@ -10,6 +11,7 @@ import {
 import { DEMO_ID, buildDemo } from "./store/demo";
 import { exportWorld, importWorld, migrate } from "./store/migrate";
 import { importScreenshots } from "./ui/importer";
+import { DEFAULT_EDITION, howToContent } from "./ui/howto";
 import { handlePaymentReturn, requireUnlock } from "./ui/paywall";
 import { isUnlocked } from "./store/unlock";
 import { MapView } from "./ui/map";
@@ -60,7 +62,8 @@ function render(): void {
   $("emptyMap").hidden = places.length > 0 || maps.length > 0;
   $("mapsToggleWrap").hidden = maps.length === 0;
   ($("mapsToggle") as HTMLInputElement).checked = world.settings.showMaps;
-  renderList($("list"), places, a, b, { pick, edit: startEdit, remove: removePlace });
+  renderList($("list"), places, a, b, { pick, edit: startEdit, remove: removePlace, edition: edition(), setEdition });
+  $("shotsHowto").replaceChildren(...howToContent("shots", edition(), setEdition));
   renderRoute($("route"), {
     selA: a, selB: b, ctx: ctx(), reachFull: r?.full, onPace: setPace,
     terrainNote: world.settings.pace === "auto" && terrainLoading ? "Reading terrain from your map screenshots…" : null,
@@ -107,6 +110,8 @@ async function addShots(files: File[]): Promise<void> {
   const added = await importScreenshots(files, {
     lastScale: () => world?.settings.lastScale ?? 0,
     setLastScale: (s) => { if (world?.settings.lastScale !== s) void updateSettings({ lastScale: s }); },
+    edition,
+    setEdition: (e) => { if (edition() !== e) void setEdition(e); },
     addMap: async (m, image) => {
       const shot: MapShot = { id: newId(), worldId: w.id, imageId: newId(), capturedAt: Date.now(), ...m };
       if (w.id !== DEMO_ID) {
@@ -220,6 +225,8 @@ async function updateSettings(patch: Partial<World["settings"]>): Promise<void> 
   render();
 }
 const setPace = (pace: Pace) => updateSettings({ pace });
+const edition = () => world?.settings.edition ?? DEFAULT_EDITION;
+const setEdition = (e: Edition) => updateSettings({ edition: e });
 
 async function startNewWorld(): Promise<void> {
   if ((await listWorlds()).length >= FREE.worlds && !(await requireUnlock("worlds"))) return;
