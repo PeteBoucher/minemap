@@ -149,7 +149,6 @@ a.btn[aria-disabled=true]{opacity:.45;cursor:not-allowed}
 /* feedback: a tab on the left edge on desktop, a ••• menu item on phones */
 .feedback-tab{position:fixed;left:0;top:50%;z-index:10;transform:translateY(-50%) rotate(180deg);writing-mode:vertical-rl;padding:12px 7px;font:400 .8rem var(--display);letter-spacing:.06em;color:var(--panel);background:var(--accent);border:0;border-radius:0 6px 6px 0;cursor:pointer;box-shadow:0 2px 10px rgb(0 0 0 / .15)}
 .feedback-tab:hover{padding-left:10px}
-.feedback-tab[hidden]{display:none}
 @media (max-width:760px){.feedback-tab{display:none}}
 @media (min-width:761px){.menu .items .feedback-item{display:none}}
 #feedbackDlg{width:min(460px,calc(100vw - 32px))}

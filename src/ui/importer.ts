@@ -4,6 +4,7 @@ import { mapCorner, mapSize } from "../core/geo";
 import type { Crop } from "../core/terrain";
 import { type Analysis, analyzeScreenshot } from "../import/analyze";
 import type { RGBAImage } from "../import/image";
+import { h } from "./dom";
 
 export interface ImportHost {
   /** Zoom level to assume when it can't be detected (the last one the user chose). */
@@ -34,11 +35,6 @@ async function toSwitchSize(file: File): Promise<Shot> {
   return { img, blob, canvas };
 }
 
-const h = <K extends keyof HTMLElementTagNameMap>(tag: K, props: Record<string, unknown> = {}, ...kids: (Node | string)[]): HTMLElementTagNameMap[K] => {
-  const e = Object.assign(document.createElement(tag), props);
-  e.append(...kids);
-  return e;
-};
 const nf = (v: number) => v.toLocaleString("en-GB");
 
 /** Run the import dialog over `files`. Returns how many maps were added. */

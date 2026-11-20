@@ -15,7 +15,7 @@ import { isUnlocked } from "./store/unlock";
 import { MapView } from "./ui/map";
 import { renderBiomeLegend, renderList, renderRoute } from "./ui/panels";
 import { terrainFor } from "./ui/terrain";
-import { analyticsAvailable, currentConsent, initAnalytics, setConsent } from "./ui/analytics";
+import { analyticsAvailable, currentConsent, feedbackAvailable, initAnalytics, setConsent } from "./ui/analytics";
 import { openFeedback } from "./ui/feedback";
 import type { Answer } from "./core/consent";
 
@@ -381,8 +381,9 @@ $("analyticsFoot").hidden = !analyticsAvailable;
 /* ---------- feedback (#14) ---------- */
 $("feedbackLink").onclick = openFeedback;
 $("feedbackTab").onclick = openFeedback;
-$("feedbackTab").hidden = !analyticsAvailable;
-document.querySelectorAll<HTMLElement>("#worldMenu .feedback-item").forEach((e) => (e.hidden = !analyticsAvailable));
+// Hidden in a build without a PostHog key: there's nowhere to send it.
+$("feedbackTab").hidden = $("feedbackFoot").hidden = !feedbackAvailable;
+document.querySelectorAll<HTMLElement>("#worldMenu .feedback-item").forEach((e) => (e.hidden = !feedbackAvailable));
 initAnalytics();
 
 /* ---------- start ---------- */

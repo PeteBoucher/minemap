@@ -1,6 +1,7 @@
 // The feedback dialog (#14): report a bug or ask for a feature. Responses go to the "Feedback" API survey in PostHog.
 import { type FeedbackKind, type FeedbackSurvey, sendFeedback } from "../core/feedback";
 import { currentConsent, posthogTarget, runningPostHog } from "./analytics";
+import { h } from "./dom";
 
 /** The "Feedback" survey in PostHog (EU), type api. Its question ids key the responses, so keep them in step. */
 const SURVEY: FeedbackSurvey = {
@@ -13,12 +14,6 @@ const SURVEY: FeedbackSurvey = {
 };
 
 const KINDS: FeedbackKind[] = ["Bug", "Feature request", "Other"];
-
-const h = <K extends keyof HTMLElementTagNameMap>(tag: K, props: Record<string, unknown> = {}, ...kids: (Node | string)[]): HTMLElementTagNameMap[K] => {
-  const e = Object.assign(document.createElement(tag), props);
-  e.append(...kids);
-  return e;
-};
 
 function dialog(): HTMLDialogElement {
   let d = document.getElementById("feedbackDlg") as HTMLDialogElement | null;
@@ -47,7 +42,7 @@ export function openFeedback(): void {
     h("p", { className: "note" },
       "Your message, and your email if you give it, are stored in PostHog (EU) so we can read and reply. ",
       currentConsent() === "granted"
-        ? "It's linked to your visit, so we can replay what happened."
+        ? "If you accepted analytics, it's linked to your visit, so we can replay what happened."
         // Nothing was recorded, so there's no replay of this problem; accepting now helps with the next report.
         : "To let future reports include a replay of what happened, accept analytics under “Analytics & privacy” at the bottom of the page."),
     status,

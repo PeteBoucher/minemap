@@ -1,5 +1,6 @@
 // The in-app feedback form's answers, as a response to the "Feedback" API survey in PostHog (#14).
 // The app draws its own form; PostHog only stores the "survey sent" event.
+import type { Consent } from "./consent";
 
 export type FeedbackKind = "Bug" | "Feature request" | "Other";
 
@@ -17,22 +18,22 @@ export interface FeedbackSurvey {
   questions: { kind: Question; message: Question; email: Question };
 }
 
-export type SurveyResponse =
-  | { ok: true; properties: Record<string, unknown> }
-  | { ok: false; error: string };
+type Refused = { ok: false; error: string };
+export type SurveyResponse = { ok: true; properties: Record<string, unknown> } | Refused;
+export type SendResult = { ok: true } | Refused;
 
 export interface SendDeps {
-  consent: "granted" | "denied" | null;
+  consent: Consent;
   survey: FeedbackSurvey;
   apiKey: string;
   host: string;
   newId: () => string;
-  /** The running PostHog SDK; only asked for when the visitor accepted analytics. */
+  /** Start or reuse the PostHog SDK. Asked for only here, and only when the visitor accepted analytics. */
   posthog: () => Promise<{ capture: (event: string, props: Record<string, unknown>) => unknown } | null>;
   fetch: (url: string, init: { method: string; headers: Record<string, string>; body: string }) => Promise<{ ok: boolean }>;
 }
 
-export async function sendFeedback(input: FeedbackInput, deps: SendDeps): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function sendFeedback(input: FeedbackInput, deps: SendDeps): Promise<SendResult> {
   const r = surveyResponse(input, deps.survey);
   if (!r.ok) return r;
   if (deps.consent === "granted") {

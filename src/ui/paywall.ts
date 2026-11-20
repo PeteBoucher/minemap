@@ -1,18 +1,13 @@
 // The unlock dialog: shown when a free limit is reached, and after returning from payment.
 import { FREE, type LimitReason } from "../core/license";
 import { PAYMENT_LINK, claimSession, isUnlocked, restoreByEmail, unlockConfigured } from "../store/unlock";
+import { h } from "./dom";
 
 const WHY: Record<LimitReason, string> = {
   worlds: `The free version keeps ${FREE.worlds} world of your own (plus the demo).`,
   places: `The free version saves up to ${FREE.places} places per world.`,
   maps: `The free version lines up ${FREE.maps} map screenshots per world.`,
   backup: "Backing up and restoring worlds is part of the full version.",
-};
-
-const h = <K extends keyof HTMLElementTagNameMap>(tag: K, props: Record<string, unknown> = {}, ...kids: (Node | string)[]): HTMLElementTagNameMap[K] => {
-  const e = Object.assign(document.createElement(tag), props);
-  e.append(...kids);
-  return e;
 };
 
 function dialog(): HTMLDialogElement {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Consent } from "./consent";
 import { type FeedbackSurvey, type SendDeps, sendFeedback, surveyResponse } from "./feedback";
 
 const survey: FeedbackSurvey = {
@@ -43,7 +44,7 @@ describe("feedback form → PostHog survey response", () => {
 describe("sending feedback", () => {
   const bug = { kind: "Bug" as const, message: "Broken image", email: "" };
 
-  function fakes(consent: "granted" | "denied" | null, status = 200) {
+  function fakes(consent: Consent, status = 200) {
     const captured: [string, Record<string, unknown>][] = [];
     const posted: { url: string; body: unknown }[] = [];
     let sdkLoads = 0;
