@@ -2,6 +2,7 @@
 // Loaded only after the visitor accepts the banner, so a visitor who hasn't is sent nothing and gets no cookie.
 // See docs/adr/0002-analytics-only-after-consent.md.
 import type { PostHog } from "posthog-js";
+import type { Visit } from "../core/checkout";
 import { type Answer, type Consent, readConsent, writeConsent } from "../core/consent";
 
 const POSTHOG_KEY: string = import.meta.env.VITE_POSTHOG_KEY ?? "";
@@ -89,6 +90,14 @@ export const posthogTarget = { apiKey: POSTHOG_KEY, host: POSTHOG_HOST };
 
 /** The SDK, for feedback the visitor sends after accepting analytics (that rule lives in core/feedback.ts). */
 export const runningPostHog = (): Promise<PostHog | null> => (POSTHOG_KEY ? load() : Promise.resolve(null));
+
+/** This visit in PostHog, to link a purchase to it (ADR 0004); null unless the visitor accepted analytics. */
+export async function currentVisit(): Promise<Visit | null> {
+  if (currentConsent() !== "granted") return null;
+  const ph = POSTHOG_KEY ? await load() : null;
+  if (!ph || currentConsent() !== "granted") return null;
+  return { distinct_id: ph.get_distinct_id(), session_id: ph.get_session_id() };
+}
 
 /** Record the visitor's answer and start or stop analytics to match. */
 export function setConsent(answer: Answer): void {

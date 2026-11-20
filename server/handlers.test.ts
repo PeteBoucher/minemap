@@ -115,6 +115,23 @@ describe("audit trail", () => {
     expect(unpaid.events[0].properties.result).toBe("refused");
   });
 
+  it("records a sale under the visit that started checkout, when the buyer accepted analytics", async () => {
+    const visitor = "019a8f2e-1c3b-7d4e-9f00-123456789abc", visit = "019a8f2e-5555-7aaa-8bbb-cccccccccccc";
+    const ok = withPostHog({ "checkout/sessions/": session({ client_reference_id: `${visitor}_${visit}` }) });
+    await unlock("cs_test_abcdefghijkl", ok.fetchFn, { ...env, ...audited });
+    expect(ok.events[0]).toMatchObject({ distinct_id: visitor,
+      properties: { result: "issued", session_id: "cs_test_abcdefghijkl", $session_id: visit, $process_person_profile: false } });
+  });
+
+  it("ignores a missing or tampered checkout reference", async () => {
+    for (const ref of [null, "", "not-a-visit", "019a8f2e-1c3b-7d4e-9f00-123456789abc", "<script>_x", "a".repeat(36) + "_" + "b".repeat(36) + "_extra"]) {
+      const r = withPostHog({ "checkout/sessions/": session({ client_reference_id: ref }) });
+      await unlock("cs_test_abcdefghijkl", r.fetchFn, { ...env, ...audited });
+      expect(r.events[0].distinct_id).toBe("cs_test_abcdefghijkl");
+      expect(r.events[0].properties).not.toHaveProperty("$session_id");
+    }
+  });
+
   it("records restores with an email hash, never the email", async () => {
     const { fetchFn, events } = withPostHog({ "checkout/sessions?": { data: [] } });
     const r = await handleRestore(new Request("https://app.test/api/restore", { method: "POST", body: JSON.stringify({ email: "Buyer@Example.com" }) }), { ...env, ...audited }, fetchFn);

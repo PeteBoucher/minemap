@@ -38,7 +38,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           PAYMENT_PATHS: >-
-            ^(api/|server/|src/core/license|src/store/unlock|src/ui/paywall|scripts/e2e-purchase\.ts$|\.github/workflows/e2e-preview\.yml$|package(-lock)?\.json$)
+            ^(api/|server/|src/core/license|src/core/checkout|src/store/unlock|src/ui/paywall|scripts/e2e-purchase\.ts$|\.github/workflows/e2e-preview\.yml$|package(-lock)?\.json$)
         run: |
           files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename')
           hits=$(printf '%s\n' "$files" | grep -E "$PAYMENT_PATHS" || true)
