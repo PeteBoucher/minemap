@@ -81,6 +81,13 @@ function forgetPostHog({ keepOptOut = false } = {}): void {
   }
 }
 
+/** Where feedback goes when it's sent without the SDK (no consent). Empty key: this build has no PostHog. */
+export const posthogTarget = { apiKey: POSTHOG_KEY, host: POSTHOG_HOST };
+
+/** The running SDK, only if the visitor accepted analytics; never loads it otherwise. */
+export const runningPostHog = (): Promise<PostHog | null> =>
+  currentConsent() === "granted" && POSTHOG_KEY ? load() : Promise.resolve(null);
+
 /** Record the visitor's answer and start or stop analytics to match. */
 export function setConsent(answer: Answer): void {
   writeConsent(storage(), answer);

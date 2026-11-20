@@ -34,6 +34,8 @@
               <button type="button" data-act="delete" class="danger saved-only">Delete this world…</button>
               <hr />
               <button type="button" data-act="unlock">Unlock everything ($5)…</button>
+              <hr class="feedback-item" />
+              <button type="button" data-act="feedback" class="feedback-item">Send feedback…</button>
             </div>
           </details>
           <input type="file" id="importFile" accept="application/json,.json" hidden />
@@ -100,7 +102,11 @@
         </div>
       </div>
     </div>
-    <footer class="foot" id="analyticsFoot"><button type="button" class="linkbtn" id="analyticsLink">Analytics &amp; privacy</button></footer>
+    <footer class="foot" id="analyticsFoot">
+      <button type="button" class="linkbtn" id="feedbackLink">Feedback</button> ·
+      <button type="button" class="linkbtn" id="analyticsLink">Analytics &amp; privacy</button>
+    </footer>
+    <button type="button" class="feedback-tab" id="feedbackTab" hidden>Feedback</button>
     <dialog id="importDlg" aria-label="Add a map screenshot"></dialog>
     <aside id="consent" class="consent" aria-label="Analytics" hidden>
       <p>
