@@ -81,6 +81,15 @@ function forgetPostHog({ keepOptOut = false } = {}): void {
   }
 }
 
+/** Feedback needs somewhere to go: unlike analytics, it isn't offered in a dev build without a key. */
+export const feedbackAvailable = POSTHOG_KEY !== "";
+
+/** Where feedback goes when it's sent without the SDK. */
+export const posthogTarget = { apiKey: POSTHOG_KEY, host: POSTHOG_HOST };
+
+/** The SDK, for feedback the visitor sends after accepting analytics (that rule lives in core/feedback.ts). */
+export const runningPostHog = (): Promise<PostHog | null> => (POSTHOG_KEY ? load() : Promise.resolve(null));
+
 /** Record the visitor's answer and start or stop analytics to match. */
 export function setConsent(answer: Answer): void {
   writeConsent(storage(), answer);

@@ -18,5 +18,5 @@ Declining after accepting opts out and removes PostHog's cookies and storage at 
 
 - Only visitors who accept are counted, so traffic numbers are a lower bound.
 - The PostHog chunk is left out of the service worker's precache, so visitors who decline never download it.
-- Feedback (#14) must work for visitors who declined: send it as a one-off event without starting analytics.
+- Feedback (#14) must work for visitors who declined: send it as a one-off event without starting analytics. See ADR 0003.
 - Any other analytics or tracking tool needs consent too, through the same banner. The banner wording in `index.html` must match what the config collects.

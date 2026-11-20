@@ -34,6 +34,8 @@
               <button type="button" data-act="delete" class="danger saved-only">Delete this world…</button>
               <hr />
               <button type="button" data-act="unlock">Unlock everything ($5)…</button>
+              <hr class="feedback-item" />
+              <button type="button" data-act="feedback" class="feedback-item">Send feedback…</button>
             </div>
           </details>
           <input type="file" id="importFile" accept="application/json,.json" hidden />
@@ -100,13 +102,17 @@
         </div>
       </div>
     </div>
-    <footer class="foot" id="analyticsFoot"><button type="button" class="linkbtn" id="analyticsLink">Analytics &amp; privacy</button></footer>
+    <footer class="foot" id="analyticsFoot">
+      <span id="feedbackFoot"><button type="button" class="linkbtn" id="feedbackLink">Feedback</button> · </span>
+      <button type="button" class="linkbtn" id="analyticsLink">Analytics &amp; privacy</button>
+    </footer>
+    <button type="button" class="feedback-tab" id="feedbackTab" hidden>Feedback</button>
     <dialog id="importDlg" aria-label="Add a map screenshot"></dialog>
     <aside id="consent" class="consent" aria-label="Analytics" hidden>
       <p>
         <strong>Help improve Minemap?</strong> If you agree, Minemap uses PostHog (hosted in the EU) and its cookies
         to count visits, measure loading speed, catch errors and record how the app is used, with anything you type
-        hidden. Nothing is collected unless you accept, and you can change your mind under “Analytics &amp; privacy” at the bottom of the page.
+        hidden. Nothing is collected unless you accept, except feedback you choose to send, and you can change your mind under “Analytics &amp; privacy” at the bottom of the page.
       </p>
       <div class="consent-btns">
         <button type="button" class="btn" id="consentYes">Accept</button>
