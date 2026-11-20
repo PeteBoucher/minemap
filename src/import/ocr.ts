@@ -116,15 +116,27 @@ export const MAX_DISTANCE = 0.08;
 
 export interface Position { x: number; y: number; z: number }
 
+/** Font pixels of empty space that separate words. */
+export const WORD_GAP = 2;
+
 /** Text of a line, with "?" for unreadable glyphs and spaces where the gap is wide. */
 export function lineText(line: Line): string {
   return line.glyphs.map((g) => {
     const { ch, d } = classify(g);
-    return (g.gap > 2 ? " " : "") + (d <= MAX_DISTANCE ? ch : "?");
+    return (g.gap > WORD_GAP ? " " : "") + (d <= MAX_DISTANCE ? ch : "?");
   }).join("").trim();
 }
 
-const POSITION = /^Position:\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)/;
+// Three numbers after the label's colon. In split-screen the text is so small that blur can break the
+// letters of "Position" into pieces, so the label needn't read, but it must hold no digits: a digit
+// misread as the colon would otherwise give a wrong position instead of none.
+const POSITION = /^[^\d:]*:\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)/;
+
+/** The position in a line's text, or null if it isn't a "Position: x, y, z" line. */
+export function positionFromText(text: string): Position | null {
+  const m = POSITION.exec(text);
+  return m ? { x: +m[1], y: +m[2], z: +m[3] } : null;
+}
 
 /** The player's position from a screenshot with "Show coordinates" on, or null if it can't be read. */
 export function readPosition(img: RGBAImage): Position | null {
@@ -132,8 +144,8 @@ export function readPosition(img: RGBAImage): Position | null {
   const halves = [[0, Math.round(img.width * 0.4)], [Math.round(img.width * 0.5), Math.round(img.width * 0.9)]];
   for (const [x0, x1] of halves) {
     for (const band of findLines(img, x0, x1)) {
-      const m = POSITION.exec(lineText(segment(img, band, x0, x1)));
-      if (m) return { x: +m[1], y: +m[2], z: +m[3] };
+      const p = positionFromText(lineText(segment(img, band, x0, x1)));
+      if (p) return p;
     }
   }
   return null;
