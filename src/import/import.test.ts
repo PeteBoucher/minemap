@@ -81,6 +81,7 @@ describe("analyzeScreenshot", () => {
     expect(rest).toEqual({
       crop: SWITCH_CROP,
       position: { x: 796, y: 78, z: 1676 },
+      edition: "bedrock",
       placement: { x: -64, z: -64, size: 2048, basis: "marker" },
     });
   });
@@ -140,8 +141,12 @@ describe("Java Edition screenshots", () => {
     for (const k of ["x", "y", "size"] as const) expect(Math.abs(a.crop![k] - want[k])).toBeLessThanOrEqual(HALF_MAP_PX);
   });
 
+  // These screenshots are also what f3Glyphs.ts was learned from, so this shows the glyphs fit them;
+  // scripts/gen-f3-glyphs.ts's leave-one-out check is what shows reading works on new screenshots.
   it.each(Object.entries(JAVA))("reads the F3 screen's block coordinates in %s", (file, { block }) => {
-    expect(analyzeScreenshot(readJava(file), 0).position).toEqual(block);
+    const a = analyzeScreenshot(readJava(file), 0);
+    expect(a.position).toEqual(block);
+    expect(a.edition).toBe(block ? "java" : null);
   });
 
   it("reads the F3 coordinates at another window size (1920×1200)", () => {

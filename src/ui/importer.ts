@@ -1,10 +1,12 @@
 // Screenshot import dialog: one step per screenshot. Shows the map found in the screenshot, what was
 // read from it, and where it will go; the user confirms, adjusts the zoom level or spot, or skips.
+import type { Edition } from "../core/edition";
 import { mapCorner, mapSize } from "../core/geo";
 import type { Crop } from "../core/terrain";
 import { type Analysis, analyzeScreenshot } from "../import/analyze";
 import type { RGBAImage } from "../import/image";
 import { h } from "./dom";
+import { howToContent } from "./howto";
 
 export interface ImportHost {
   /** Zoom level to assume when it can't be detected (the last one the user chose). */
@@ -12,6 +14,9 @@ export interface ImportHost {
   setLastScale(scale: number): void;
   addMap(map: { x: number; z: number; size: number; crop: Crop }, image: Blob): Promise<void>;
   addPlace(place: { name: string; x: number; z: number }): Promise<void>;
+  /** The world's edition, for instructions; set from a screenshot whose coordinates were read. */
+  edition(): Edition;
+  setEdition(edition: Edition): void;
 }
 
 /** The screenshot fitted into the 1280×720 frame (the size the importer and map drawing work in). */
@@ -53,6 +58,7 @@ export async function importScreenshots(files: File[], host: ImportHost): Promis
     try {
       const original = await readPixels(files[i]);
       a = analyzeScreenshot(original, host.lastScale());
+      if (a.edition) host.setEdition(a.edition);
       shot = await toShot(files[i], original, a.frame);
     } catch (e) { error = (e as Error).message; }
     const result = await step(dlg, { index: i, total: files.length, name: files[i].name, shot, analysis: a, error, host });
@@ -108,7 +114,10 @@ function step(dlg: HTMLDialogElement, s: StepInput): Promise<"added" | "skipped"
 
     if (s.error) status.textContent = s.error;
     else if (!crop) status.textContent = "This doesn't look like a screenshot of a map held in your hand." + (pos ? " You can still save where you were standing." : "");
-    else if (!pos) status.textContent = "Found the map, but couldn't read any coordinates. Type any spot that's on this map. (For Minemap to read them: in Bedrock Edition turn on “Show coordinates” in your world settings; in Java Edition press F3 before taking the screenshot.)";
+    else if (!pos) {
+      const unread = (e: Edition) => status.replaceChildren(...howToContent("unread", e, (n) => { host.setEdition(n); unread(n); }));
+      unread(host.edition());
+    }
     else if (placement?.basis === "marker") status.textContent = `Read your position (${nf(pos.x)}, ${nf(pos.z)}) and found your marker on the map, so it's placed exactly and the zoom level is set for you.`;
     else status.textContent = `Read your position (${nf(pos.x)}, ${nf(pos.z)}). Placed assuming you were standing on this map — check the zoom level. If the map shows somewhere else, type a spot that's on it.`;
 

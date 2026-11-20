@@ -10,8 +10,13 @@ describe("f3PositionFromText", () => {
     expect(f3PositionFromText(["XYZ: 1.558 / 84.00000 / 3.621", "Block: 7 84 3"])).toBeNull();
   });
 
-  it("rounds the XYZ line down, towards minus, when it's the only one that reads", () => {
-    expect(f3PositionFromText(["XYZ: -6.313 / 62.11076 / -0.5", "Bl?ck: -7 62 -1"])).toEqual({ x: -7, y: 62, z: -1 });
+  it("rounds the XYZ line down, towards minus, to check the Block line", () => {
+    expect(f3PositionFromText(["XYZ: -6.313 / 62.11076 / -0.5", "Block: -7 62 -1"])).toEqual({ x: -7, y: 62, z: -1 });
+  });
+
+  it("gives no position when only one of the two lines reads", () => {
+    expect(f3PositionFromText(["XYZ: -6.313 / 62.11076 / 72.688", "Bl?ck: -7 62 72"])).toBeNull();
+    expect(f3PositionFromText(["XYZ: -6.3?3 / 62.11076 / 72.688", "Block: -7 62 72"])).toBeNull();
   });
 
   it("ignores other lines that start with three numbers", () => {

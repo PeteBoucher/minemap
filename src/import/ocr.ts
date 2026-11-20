@@ -1,7 +1,6 @@
 // Reads the "Position: x, y, z" line that Minecraft shows when "Show coordinates" is on.
 // The game draws it in a fixed pixel font (white with a dark drop shadow), so instead of a
 // general OCR engine we split the line into glyphs and match each against learned templates.
-import { readF3Position } from "./f3";
 import { GLYPHS } from "./glyphs";
 import { type RGBAImage, chroma, luma } from "./image";
 
@@ -139,16 +138,8 @@ export function positionFromText(text: string): Position | null {
   return m ? { x: +m[1], y: +m[2], z: +m[3] } : null;
 }
 
-/**
- * The player's position, or null if it can't be read: Bedrock's "Show coordinates" line, or Java
- * Edition's F3 screen (see f3.ts).
- */
+/** The player's position from a screenshot with "Show coordinates" on, or null if it can't be read. */
 export function readPosition(img: RGBAImage): Position | null {
-  return readCoordinatesLine(img) ?? readF3Position(img);
-}
-
-/** The position from Bedrock's "Position: x, y, z" line. */
-function readCoordinatesLine(img: RGBAImage): Position | null {
   // the text box sits at the left edge of each split-screen half; try the left half first
   const halves = [[0, Math.round(img.width * 0.4)], [Math.round(img.width * 0.5), Math.round(img.width * 0.9)]];
   for (const [x0, x1] of halves) {

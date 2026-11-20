@@ -5,7 +5,7 @@
 // (the map itself). The known Switch layouts are tried first; otherwise the whole screen is
 // searched, coarse then fine, so other layouts (Java Edition, other consoles) are found too.
 import { type Crop, SWITCH_CROP } from "../core/terrain";
-import { type RGBAImage, rgb } from "./image";
+import { FRAME_H, FRAME_W, type RGBAImage, rgb } from "./image";
 
 /** Where the map sits when held on the Switch: single-player and each half of split-screen. */
 export const CROP_CANDIDATES: { name: string; crop: Crop }[] = [
@@ -28,7 +28,7 @@ function isParchment([r, g, b]: RGB): boolean {
 const HUD_Y = 580;
 
 function sampler(img: RGBAImage) {
-  const sx = img.width / 1280, sy = img.height / 720;
+  const sx = img.width / FRAME_W, sy = img.height / FRAME_H;
   return (x: number, y: number): RGB | null => {
     const px = Math.round(x * sx), py = Math.round(y * sy);
     return px < 0 || py < 0 || px >= img.width || py >= img.height ? null : rgb(img, px, py);
@@ -86,8 +86,8 @@ const FIT_N = 24;
 function searchCrop(img: RGBAImage): Crop | null {
   const coarse: { c: Crop; s: number }[] = [];
   for (let size = 280; size <= 680; size += 16)
-    for (let y = 8; y <= 260 && y + size * 0.5 <= 720; y += 8)
-      for (let x = 8; x + size <= 1272; x += 8) {
+    for (let y = 8; y <= 260 && y + size * 0.5 <= FRAME_H; y += 8)
+      for (let x = 8; x + size <= FRAME_W - 8; x += 8) {
         const c = { x, y, size }, s = mapLikeness(img, c);
         if (s >= 0.6) coarse.push({ c, s });
       }

@@ -8,14 +8,14 @@
 // Also reports a leave-one-out check: each screenshot read with bitmaps learned without it.
 import fs from "node:fs";
 import jpeg from "jpeg-js";
-import { type F3Glyph, f3Lines } from "../src/import/f3";
+import { type F3Glyph, F3_WORD_GAP, f3Lines } from "../src/import/f3";
 
 const DIR = "src/import/fixtures/java/";
 const labels: Record<string, string[]> = JSON.parse(fs.readFileSync(`${DIR}f3.json`, "utf8"));
 
 const words = (line: F3Glyph[]) => {
   const out: F3Glyph[][] = [];
-  line.forEach((g, i) => (i === 0 || g.gap >= 3 ? out.push([g]) : out.at(-1)!.push(g)));
+  line.forEach((g, i) => (i === 0 || g.gap >= F3_WORD_GAP ? out.push([g]) : out.at(-1)!.push(g)));
   return out;
 };
 

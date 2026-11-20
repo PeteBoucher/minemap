@@ -6,8 +6,8 @@
 // (scripts/gen-f3-glyphs.ts). Two lines say where the player is:
 //   XYZ: -6.313 / 62.11076 / 72.688
 //   Block: -7 62 72
-// The Block line is what's used (whole blocks, like Bedrock's "Position:"); the XYZ line, rounded
-// down, must agree when it reads too, because a wrong position is worse than none.
+// The Block line is what's used (whole blocks, like Bedrock's "Position:"), and only when the XYZ
+// line also reads and, rounded down, agrees: a wrong position is worse than none.
 import { F3_GLYPHS } from "./f3Glyphs";
 import { type RGBAImage, chroma, luma } from "./image";
 import type { Position } from "./ocr";
@@ -15,10 +15,16 @@ import type { Position } from "./ocr";
 /** F3 text: light grey (224, 224, 224 when drawn). */
 const isText = (img: RGBAImage, x: number, y: number) => luma(img, x, y) >= 180 && chroma(img, x, y) < 50;
 
+/** The box behind F3 text is darker than this, even over bright water or snow. */
+const BOX_LUMA = 120;
+/** How far (screen pixels) to look either side of a text pixel for the box. */
+const BOX_REACH = 4;
+
 /** Text with the dark box beside it, so a bright scene (snow, sky) isn't taken for text. */
 function isBoxedText(img: RGBAImage, x: number, y: number): boolean {
   if (!isText(img, x, y)) return false;
-  for (let d = 1; d <= 4; d++) if ((x - d >= 0 && luma(img, x - d, y) < 120) || (x + d < img.width && luma(img, x + d, y) < 120)) return true;
+  for (let d = 1; d <= BOX_REACH; d++)
+    if ((x - d >= 0 && luma(img, x - d, y) < BOX_LUMA) || (x + d < img.width && luma(img, x + d, y) < BOX_LUMA)) return true;
   return false;
 }
 
@@ -29,14 +35,20 @@ export interface F3Glyph {
   gap: number;
 }
 
-/** Glyph rows: caps and digits fill rows 0–6, descenders reach row 7. */
-const ROWS = 8;
+/** Glyph rows: caps and digits fill rows 0–6 (CAP_ROWS), descenders reach row 7. */
+const ROWS = 8, CAP_ROWS = 7;
 /** F3 lines are this many font pixels apart. */
 const PITCH = 9;
 /** Wider than any glyph of the font, in font pixels: past the end of a line's box (the scene). */
 const MAX_GLYPH = 7;
 /** Empty font pixels that mean a space between words (glyphs within a word are 1 apart). */
-const SPACE = 3;
+export const F3_WORD_GAP = 3;
+/** Empty font pixels after which a line has ended. */
+const LINE_END = 12;
+/** F3 sits in the left half of the screen (the right half has its own column) ... */
+const LEFT = 0.5;
+/** ... its first line within the top tenth, and the coordinates well inside the top 60%. */
+const FIRST_LINE_ZONE = 0.1, LINES_ZONE = 0.6;
 
 /**
  * Every line of the F3 screen, as glyph bitmaps. F3 stacks its lines from the top of the screen on
@@ -44,10 +56,10 @@ const SPACE = 3;
  * each line instead would be fooled by bright scenery (a snowy map) beside the text.
  */
 export function f3Lines(img: RGBAImage): F3Glyph[][] {
-  const x1 = Math.round(img.width * 0.5), first = firstLine(img, x1);
+  const x1 = Math.round(img.width * LEFT), first = firstLine(img, x1);
   if (!first) return [];
   const { y0, s } = first, lines: F3Glyph[][] = [];
-  for (let y = y0; y + 7 * s <= img.height * 0.6; y += PITCH * s) {
+  for (let y = y0; y + CAP_ROWS * s <= img.height * LINES_ZONE; y += PITCH * s) {
     const line = readLine(img, y, s, x1);
     if (line.length) lines.push(line);
   }
@@ -57,13 +69,14 @@ export function f3Lines(img: RGBAImage): F3Glyph[][] {
 /** The top line's first row and font pixel size, or null if the top left has no F3-like text. */
 function firstLine(img: RGBAImage, x1: number): { y0: number; s: number } | null {
   let start = -1;
-  for (let y = 0; y < img.height * 0.1; y++) {
+  for (let y = 0; y < img.height * FIRST_LINE_ZONE; y++) {
     let n = 0;
     for (let x = 0; x < x1 && n < 3; x++) if (isBoxedText(img, x, y)) n++;
     if (n >= 3 && start < 0) start = y;
     if (n < 3 && start >= 0) {
       const s = strokeWidth(img, start, y - 1, x1), rows = (y - start) / s;
-      if (s >= 1 && rows > 6.5 && rows < ROWS + 0.5) return { y0: start, s };
+      // a line is CAP_ROWS font pixels high, or ROWS with descenders
+      if (s >= 1 && Math.round(rows) >= CAP_ROWS && Math.round(rows) <= ROWS) return { y0: start, s };
       start = -1;
     }
   }
@@ -107,22 +120,22 @@ function readLine(img: RGBAImage, y0: number, s: number, x1: number): F3Glyph[] 
       gx0 = -1;
     }
     // a long empty run once there is text: the line has ended
-    if (!on && gx0 < 0 && lastEnd >= 0 && (x - lastEnd) / s > 12) break;
+    if (!on && gx0 < 0 && lastEnd >= 0 && (x - lastEnd) / s > LINE_END) break;
   }
   return glyphs;
 }
 
 /** Text of a line: "?" for a glyph not among the learned bitmaps. */
 export function f3Text(line: F3Glyph[]): string {
-  return line.map((g) => (g.gap >= SPACE ? " " : "") + (F3_GLYPHS[g.bitmap] ?? "?")).join("").trim();
+  return line.map((g) => (g.gap >= F3_WORD_GAP ? " " : "") + (F3_GLYPHS[g.bitmap] ?? "?")).join("").trim();
 }
 
 const BLOCK = /^Block: (-?\d+) (-?\d+) (-?\d+)(?: |$)/;
 const XYZ = /^XYZ: (-?\d+\.\d+) \/ (-?\d+\.\d+) \/ (-?\d+\.\d+)(?: |$)/;
 
 /**
- * The block position in F3 lines' text: the Block line, checked against the XYZ line rounded down
- * when both are there. Null if neither reads, or they disagree.
+ * The block position in F3 lines' text: the Block line, checked against the XYZ line rounded down.
+ * Null unless both read and agree.
  */
 export function f3PositionFromText(texts: string[]): Position | null {
   let block: Position | null = null, xyz: Position | null = null;
@@ -131,9 +144,10 @@ export function f3PositionFromText(texts: string[]): Position | null {
     if (b) block = { x: +b[1], y: +b[2], z: +b[3] };
     if (p) xyz = { x: Math.floor(+p[1]), y: Math.floor(+p[2]), z: Math.floor(+p[3]) };
   }
-  if (block && xyz && (block.x !== xyz.x || block.y !== xyz.y || block.z !== xyz.z)) return null;
-  return block ?? xyz;
+  return block && xyz && samePosition(block, xyz) ? block : null;
 }
+
+const samePosition = (a: Position, b: Position) => a.x === b.x && a.y === b.y && a.z === b.z;
 
 /** The player's block position from a screenshot with F3 open, or null if it can't be read surely. */
 export function readF3Position(img: RGBAImage): Position | null {
