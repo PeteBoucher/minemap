@@ -1,6 +1,6 @@
 // Reads the player's position from Java Edition's F3 debug screen.
 //
-// F3 draws its lines at the top left in the game's pixel font: light grey on a dark box, no shadow,
+// F3 draws its lines at the top left in the game's pixel font: light grey on a see-through dark box, no shadow,
 // and crisp, each font pixel a whole number of screen pixels (2 or 3 on a Mac). So each glyph is cut
 // back to its exact font-pixel bitmap and looked up among bitmaps learned from labelled screenshots
 // (scripts/gen-f3-glyphs.ts). Two lines say where the player is:
@@ -12,20 +12,36 @@ import { F3_GLYPHS } from "./f3Glyphs";
 import { type RGBAImage, chroma, luma } from "./image";
 import type { Position } from "./ocr";
 
-/** F3 text: light grey (224, 224, 224 when drawn). */
-const isText = (img: RGBAImage, x: number, y: number) => luma(img, x, y) >= 180 && chroma(img, x, y) < 50;
+/**
+ * F3 text: light grey, drawn as (224, 224, 224); allow for JPEG. Kept tight so that snow (about
+ * 200) and white sky (250+) beside the box aren't taken for text.
+ */
+const isText = (img: RGBAImage, x: number, y: number) => {
+  const l = luma(img, x, y);
+  return l >= 210 && l <= 238 && chroma(img, x, y) < 50;
+};
 
-/** The box behind F3 text is darker than this, even over bright water or snow. */
-const BOX_LUMA = 120;
-/** How far (screen pixels) to look either side of a text pixel for the box. */
-const BOX_REACH = 4;
+/**
+ * The box behind F3 text is darker than this. It is see-through, so it is lighter over a bright
+ * scene: about 120 over a pale sky, 155 over white snow.
+ */
+const BOX_LUMA = 170;
+/** How far (screen pixels) to look either side of a text pixel for the box: past the widest glyph. */
+const BOX_REACH = 24;
 
-/** Text with the dark box beside it, so a bright scene (snow, sky) isn't taken for text. */
+/**
+ * Text with the box on both sides of it, so bright scenery (snow, sky) isn't taken for text: next
+ * to a line's box it can be as light as the text, but has the box on one side only.
+ */
 function isBoxedText(img: RGBAImage, x: number, y: number): boolean {
   if (!isText(img, x, y)) return false;
-  for (let d = 1; d <= BOX_REACH; d++)
-    if ((x - d >= 0 && luma(img, x - d, y) < BOX_LUMA) || (x + d < img.width && luma(img, x + d, y) < BOX_LUMA)) return true;
-  return false;
+  const isBox = (u: number) => luma(img, u, y) < BOX_LUMA;
+  let left = false, right = false;
+  for (let d = 1; d <= BOX_REACH && !(left && right); d++) {
+    left ||= x - d >= 0 && isBox(x - d);
+    right ||= x + d < img.width && isBox(x + d);
+  }
+  return left && right;
 }
 
 export interface F3Glyph {
@@ -49,6 +65,8 @@ const LINE_END = 12;
 const LEFT = 0.5;
 /** ... its first line within the top tenth, and the coordinates well inside the top 60%. */
 const FIRST_LINE_ZONE = 0.1, LINES_ZONE = 0.6;
+/** A row with under 1/LINE_FADE of a line's busiest row's text pixels is past the line. */
+const LINE_FADE = 4;
 
 /**
  * Every line of the F3 screen, as glyph bitmaps. F3 stacks its lines from the top of the screen on
@@ -68,12 +86,15 @@ export function f3Lines(img: RGBAImage): F3Glyph[][] {
 
 /** The top line's first row and font pixel size, or null if the top left has no F3-like text. */
 function firstLine(img: RGBAImage, x1: number): { y0: number; s: number } | null {
-  let start = -1;
+  let start = -1, peak = 0;
   for (let y = 0; y < img.height * FIRST_LINE_ZONE; y++) {
     let n = 0;
-    for (let x = 0; x < x1 && n < 3; x++) if (isBoxedText(img, x, y)) n++;
-    if (n >= 3 && start < 0) start = y;
-    if (n < 3 && start >= 0) {
+    for (let x = 0; x < x1; x++) if (isBoxedText(img, x, y)) n++;
+    if (n >= 3 && start < 0) { start = y; peak = 0; }
+    peak = Math.max(peak, n);
+    // a busy scene (snow among rock) leaves a scatter of text-like pixels between lines: a row
+    // far sparser than the line's busiest has left the line
+    if (start >= 0 && (n < 3 || n < peak / LINE_FADE)) {
       const s = strokeWidth(img, start, y - 1, x1), rows = (y - start) / s;
       // a line is CAP_ROWS font pixels high, or ROWS with descenders
       if (s >= 1 && Math.round(rows) >= CAP_ROWS && Math.round(rows) <= ROWS) return { y0: start, s };
@@ -97,7 +118,12 @@ function strokeWidth(img: RGBAImage, y0: number, y1: number, x1: number): number
 /** The glyphs of the line whose top row is y0, left to right, up to where its box ends. */
 function readLine(img: RGBAImage, y0: number, s: number, x1: number): F3Glyph[] {
   const y1 = Math.min(img.height - 1, Math.round(y0 + ROWS * s) - 1);
-  const colInk = (x: number) => { for (let y = y0; y <= y1; y++) if (isText(img, x, y)) return true; return false; };
+  const colInk = (x: number) => { for (let y = y0; y <= y1; y++) if (isBoxedText(img, x, y)) return true; return false; };
+  // the box runs a font pixel above the text: scenery there means the box, and the line, has ended
+  const boxAbove = (xa: number, xb: number) => {
+    for (let x = xa; x < xb && y0 > 0; x++) if (luma(img, x, y0 - 1) >= BOX_LUMA) return false;
+    return true;
+  };
   const glyphs: F3Glyph[] = [];
   let gx0 = -1, lastEnd = -1;
   for (let x = 0; x <= x1; x++) {
@@ -105,7 +131,7 @@ function readLine(img: RGBAImage, y0: number, s: number, x1: number): F3Glyph[] 
     if (on && gx0 < 0) gx0 = x;
     if (!on && gx0 >= 0) {
       const cols = Math.round((x - gx0) / s);
-      if (cols > MAX_GLYPH) break;
+      if (cols > MAX_GLYPH || !boxAbove(gx0, x)) break;
       const rowsOut: string[] = [];
       for (let r = 0; r < ROWS; r++) {
         let row = "";

@@ -149,6 +149,16 @@ describe("Java Edition screenshots", () => {
     expect(a.edition).toBe(block ? "java" : null);
   });
 
+  // F3's box is see-through: over snow and sky it's far lighter, and the scenery right beside it can
+  // be as light as the text.
+  it.each([
+    ["f3-over-white-snow.jpg", { x: 617, y: 184, z: 380 }],
+    ["f3-over-sky-and-snow.jpg", { x: 804, y: 252, z: 632 }],
+    ["f3-over-snowy-rock.jpg", { x: 617, y: 184, z: 380 }],
+  ])("reads the F3 coordinates with bright scenery behind them in %s", (file, block) => {
+    expect(analyzeScreenshot(readJava(file), 0).position).toEqual(block);
+  });
+
   it("reads the F3 coordinates at another window size (1920×1200)", () => {
     expect(analyzeScreenshot(readJava("2026-11-20_13.43.40.jpg"), 0).position).toEqual({ x: -7, y: 62, z: 72 });
   });
