@@ -107,7 +107,8 @@ export function renderRoute(R: HTMLElement, { selA: a, selB: b, ctx, reachFull, 
     if (a && reachFull) {
       const lo = Math.min(...reachFull), hi = Math.max(...reachFull);
       const n = document.createElement("p");
-      n.textContent = `Shaded: how far you get from ${a.name} in one day's daylight (${hi - lo < 20 ? "about " + nf(hi) : nf(lo) + "–" + nf(hi)} blocks, depending on direction). Dashed: out and back before dark.`;
+      // the map leaves the shading out when the whole view is within reach, so say so
+      n.textContent = `From ${a.name}, one day's daylight gets you ${hi - lo < 20 ? "about " + nf(hi) : nf(lo) + "–" + nf(hi)} blocks, depending on direction. Shaded on the map (unless everything in view is within reach); dashed: out and back before dark.`;
       R.append(n);
     }
     R.append(paceSelect(ctx.pace, onPace, terrainNote));
