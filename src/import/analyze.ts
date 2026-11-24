@@ -23,9 +23,9 @@ export interface Analysis {
 /** `img` is the screenshot as taken, any size: text is read at full size, the map found in the frame. */
 export function analyzeScreenshot(img: RGBAImage, fallbackScale: number): Analysis {
   const frame = fitToFrame(img);
-  const crop = detectCrop(frame)?.crop ?? null;
   const bedrock = readPosition(img), java = bedrock ? null : readF3Position(img);
   const position = bedrock ?? java, edition = bedrock ? "bedrock" : java ? "java" : null;
-  const placement = crop && position ? placeFromPosition(frame, crop, position, fallbackScale) : null;
+  const crop = detectCrop(frame, edition)?.crop ?? null;
+  const placement = crop && position ? placeFromPosition(frame, crop, position, fallbackScale, edition) : null;
   return { frame, crop, position, edition, placement };
 }

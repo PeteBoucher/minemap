@@ -5,6 +5,8 @@ import { type Crop, SWITCH_CROP } from "../core/terrain";
 import { DEMO_MAPS } from "../store/demoWorld";
 import { analyzeScreenshot } from "./analyze";
 import { detectCrop } from "./crop";
+import javaCrops from "./fixtures/java/crops.json";
+import { frameRect } from "./image";
 import fixtures from "./ocr.fixtures.json";
 import { type Position, positionFromText, readPosition } from "./ocr";
 import { checkScales, placeFromPosition } from "./place";
@@ -112,23 +114,53 @@ describe("placement", () => {
 });
 
 // Real Java Edition screenshots from a Mac (3024×1898, about 16:10). Map squares measured by hand
-// from the fitted frames. View bobbing moves the map down in 14.03.*; in 14.04.* looking further
-// down holds it lower and smaller, and its unexplored corner is parchment. Measuring on
-// fitToFrame's output is safe: image.test.ts pins its geometry with plain arithmetic.
+// from the fitted frames, in fixtures/java/crops.json (scripts/gen-frame-template.ts learns the
+// frame from them too). View bobbing moves the map down in 14.03.*; in 14.04.* looking further down
+// holds it lower and smaller, and its unexplored corner is parchment. Measuring on fitToFrame's
+// output is safe: image.test.ts pins its geometry with plain arithmetic.
 // `block` is the F3 screen's "Block: x y z" line, read by eye at full size (null: F3 was off).
-const JAVA: Record<string, { crop: Crop; block: Position | null }> = {
-  "2026-11-20_14.00.44.jpg": { crop: { x: 368, y: 59.5, size: 543 }, block: { x: 1, y: 84, z: 3 } },
-  "2026-11-20_14.01.00.jpg": { crop: { x: 368, y: 59.5, size: 543 }, block: { x: 1, y: 84, z: 3 } },
-  "2026-11-20_14.01.10.jpg": { crop: { x: 368, y: 59.5, size: 543 }, block: null }, // "Saved screenshot" chat line over the map
-  "2026-11-20_14.03.39.jpg": { crop: { x: 368, y: 61.5, size: 543 }, block: null },
-  "2026-11-20_14.03.41.jpg": { crop: { x: 368, y: 61.5, size: 543 }, block: { x: -14, y: 63, z: 83 } }, // chat line; F3 over bright water
-  "2026-11-20_14.04.33.jpg": { crop: { x: 369.5, y: 67.5, size: 539 }, block: { x: 54, y: 63, z: 219 } }, // F3 over bright water
-  "2026-11-20_14.04.36.jpg": { crop: { x: 369.5, y: 67.5, size: 539 }, block: null }, // chat line
-  "2026-11-20_14.07.04.jpg": { crop: { x: 368, y: 59.5, size: 543 }, block: null },
-  "2026-11-20_14.07.09.jpg": { crop: { x: 368, y: 59.5, size: 543 }, block: { x: 44, y: 95, z: 51 } }, // chat line
-  "2026-11-20_14.08.54.jpg": { crop: { x: 368, y: 59.5, size: 543 }, block: { x: -85, y: 72, z: 2 } }, // in shade: the frame is grey-purple
-  "2026-11-20_14.08.55.jpg": { crop: { x: 368, y: 59.5, size: 543 }, block: null }, // in shade, chat line
+const JAVA: Record<string, { crop: Crop; block: Position | null }> = Object.fromEntries(Object.entries({
+  "2026-11-20_14.00.44.jpg": { x: 1, y: 84, z: 3 },
+  "2026-11-20_14.01.00.jpg": { x: 1, y: 84, z: 3 },
+  "2026-11-20_14.01.10.jpg": null, // "Saved screenshot" chat line over the map
+  "2026-11-20_14.03.39.jpg": null,
+  "2026-11-20_14.03.41.jpg": { x: -14, y: 63, z: 83 }, // chat line; F3 over bright water
+  "2026-11-20_14.04.33.jpg": { x: 54, y: 63, z: 219 }, // F3 over bright water
+  "2026-11-20_14.04.36.jpg": null, // chat line
+  "2026-11-20_14.07.04.jpg": null,
+  "2026-11-20_14.07.09.jpg": { x: 44, y: 95, z: 51 }, // chat line
+  "2026-11-20_14.08.54.jpg": { x: -85, y: 72, z: 2 }, // in shade: the frame is grey-purple
+  "2026-11-20_14.08.55.jpg": null, // in shade, chat line
+} as Record<string, Position | null>).map(([file, block]) => {
+  const crop = (javaCrops as Record<string, Crop>)[file];
+  if (!crop) throw new Error(`${file} has no square in fixtures/java/crops.json`);
+  return [file, { crop, block }];
+}));
+
+// Java screenshots whose maps have unexplored edges. Unexplored map is drawn in the frame's parchment
+// tint, so only the edges that explored map reaches can be measured: by hand, in full-size pixels
+// (left/top: the map's first column/row; right/bottom: the frame's first, just past the map).
+// Where only three edges show, the fourth follows from the map being square (noted). Edges under
+// unexplored map can't be measured at all, so some screenshots pin only one or two.
+// On main, level4, 10.34.24 and 10.39.01 were found wrong; the others happened to sit at the Switch
+// layout and are here to keep them right.
+type Edges = Partial<Record<"left" | "top" | "right" | "bottom", number>>;
+const UNEXPLORED: Record<string, Edges> = {
+  "level4-unexplored-top.jpg": { left: 529, top: 100, right: 1391, bottom: 962 }, // 1920×1142; top from the square
+  "2026-11-24_10.31.07.jpg": { right: 1412, bottom: 1005 }, // 1920×1200 from here on
+  "2026-11-24_10.32.09.jpg": { right: 1412 }, // almost all unexplored
+  "2026-11-24_10.34.24.jpg": { top: 110, right: 1412 }, // held lower: looking down from a boat
+  "2026-11-24_10.35.40.jpg": { left: 508, top: 100, right: 1412, bottom: 1005 },
+  "2026-11-24_10.39.01.jpg": { left: 508, top: 106, right: 1412, bottom: 1010 },
+  "2026-11-24_10.39.18.jpg": { left: 508, bottom: 1005 }, // unexplored top half
 };
+
+/** A crop's edges in full-size pixels of a w×h screenshot (undoing fitToFrame; see frameRect). */
+function cropEdges(c: Crop, w: number, h: number): Required<Edges> {
+  const r = frameRect(w, h), kx = r.sw / r.w, ky = h / r.h;
+  const X = (x: number) => r.sx + (x - r.x) * kx, Y = (y: number) => (y - r.y) * ky;
+  return { left: X(c.x), top: Y(c.y), right: X(c.x + c.size), bottom: Y(c.y + c.size) };
+}
 const readJava = (file: string) => read(`./fixtures/java/${file}`);
 /** Half a map pixel: 543 / 128 ≈ 4.2 frame pixels per map pixel. */
 const HALF_MAP_PX = 2;
@@ -161,6 +193,43 @@ describe("Java Edition screenshots", () => {
 
   it("reads the F3 coordinates at another window size (1920×1200)", () => {
     expect(analyzeScreenshot(readJava("2026-11-20_13.43.40.jpg"), 0).position).toEqual({ x: -7, y: 62, z: 72 });
+  });
+
+  // A map pixel is 7 full-size pixels in these screenshots: allow half of one.
+  it.each(Object.entries(UNEXPLORED))("finds the held map in %s though its edges are unexplored", (file, edges) => {
+    const img = readJava(file), crop = analyzeScreenshot(img, 0).crop;
+    expect(crop).not.toBeNull();
+    const got = cropEdges(crop!, img.width, img.height);
+    for (const [k, want] of Object.entries(edges)) expect(Math.abs(got[k as keyof Edges] - want), k).toBeLessThanOrEqual(3.5);
+  });
+
+  it("finds a map held at night while walking, though it is tilted and lit purple", () => {
+    // 2026-11-24_10.39.40: the frame is a trapezoid here (its left edge runs from x=506 to 501 down the
+    // map), which no square fits exactly. The square found is about 8 full-size pixels inside the
+    // map's lower edges, about 1.2 map pixels; this only pins it to within a map pixel and a half.
+    // Its top edge is under unexplored map and can't be measured.
+    const img = readJava("2026-11-24_10.39.40.jpg"), crop = analyzeScreenshot(img, 0).crop;
+    expect(crop).not.toBeNull();
+    const got = cropEdges(crop!, img.width, img.height);
+    for (const [k, want] of Object.entries({ left: 504, right: 1418.5, bottom: 1023 })) expect(Math.abs(got[k as keyof Edges] - want), k).toBeLessThanOrEqual(10);
+  });
+
+  // Java lights the held map like any other item: under a roof the white player marker comes out
+  // cream, about (229, 209, 186), dimmed exactly as the frame is. Zoom levels worked out by hand from
+  // the Block line and where the marker is drawn.
+  it.each([
+    ["2026-11-24_10.39.18.jpg", { x: -832, z: -64, size: 256 }], // under a roof, level 1
+    ["2026-11-24_10.39.01.jpg", { x: -832, z: 64, size: 128 }], // under a roof, level 0
+    ["2026-11-24_10.31.07.jpg", { x: -320, z: -64, size: 256 }],
+    ["2026-11-24_10.32.09.jpg", { x: -576, z: -64, size: 512 }],
+    ["2026-11-24_10.34.24.jpg", { x: -576, z: -64, size: 512 }],
+    ["2026-11-24_10.35.40.jpg", { x: -576, z: -64, size: 512 }],
+    ["level4-unexplored-top.jpg", { x: -64, z: -64, size: 2048 }],
+  ])("places %s by its player marker, whatever the light", (file, want) => {
+    const a = analyzeScreenshot(readJava(file), 0);
+    expect(a.placement).toEqual({ ...want, basis: "marker" });
+    // and no other zoom level's spot looks like a marker
+    expect(checkScales(a.frame, a.crop!, a.position!, a.edition).filter((c) => c.found).map((c) => c.corner.size)).toEqual([want.size]);
   });
 
   it("finds the map in a 32:9 screenshot as in a 16:9 one", () => {

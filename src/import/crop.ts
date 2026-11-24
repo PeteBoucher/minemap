@@ -2,9 +2,11 @@
 //
 // The map is drawn inside a parchment frame. A candidate square fits when the band just outside it
 // has the parchment tint (the frame) and the band just inside it does not look like the frame
-// (the map itself). The known Switch layouts are tried first; otherwise the whole screen is
-// searched, coarse then fine, so other layouts (Java Edition, other consoles) are found too.
+// (the map itself). The known Switch layouts are tried first; then a Java Edition map frame
+// (frame.ts); otherwise the whole screen is searched, coarse then fine, for other layouts.
 import { type Crop, SWITCH_CROP } from "../core/terrain";
+import type { Edition } from "../core/edition";
+import { findFramedMap, frameMatch, lumaPlane } from "./frame";
 import { FRAME_H, FRAME_W, type RGBAImage, rgb } from "./image";
 
 /** Where the map sits when held on the Switch: single-player and each half of split-screen. */
@@ -115,12 +117,31 @@ function searchCrop(img: RGBAImage): Crop | null {
   return s >= MIN_FIT ? c : null;
 }
 
-/** The held map's square in a 1280×720 screenshot, or null if there doesn't seem to be one. */
-export function detectCrop(img: RGBAImage): { name: string; crop: Crop; likeness: number } | null {
+/**
+ * The held map's square in a 1280×720 screenshot, or null if there doesn't seem to be one.
+ * `edition` is whose coordinates were read from the screenshot, if any: a Java screenshot's map is
+ * never at a Switch layout except by coincidence, so its frame match is taken as found.
+ */
+export function detectCrop(img: RGBAImage, edition: Edition | null = null): { name: string; crop: Crop; likeness: number } | null {
   const presets = CROP_CANDIDATES.map((c) => ({ ...c, likeness: mapLikeness(img, c.crop) }));
   const preset = presets.reduce((a, b) => (b.likeness > a.likeness ? b : a));
   const presetFit = preset.likeness >= 0.9 ? fitScore(img, preset.crop, FIT_N) : 0;
-  if (presetFit >= 1.8) return preset; // a clean fit at a known layout
+  if (edition !== "java" && presetFit >= 1.8) return preset; // a clean fit at a known layout
+  // The frame is matched by its texture, so unexplored map along an edge (which has the frame's tint
+  // and fools the edge test) doesn't matter. Learned from Java, it fits Switch frames as well.
+  const L = lumaPlane(img), framed = findFramedMap(L);
+  if (framed) {
+    const found = { name: "frame", crop: framed.crop, likeness: mapLikeness(img, framed.crop) };
+    if (edition === "java") return found;
+    // Without Java's F3 screen this may be a Switch screenshot, whose layouts are exact: a match
+    // within half a map pixel of one is that layout.
+    const near = presets.find(({ crop: c }) => Math.abs(c.x - framed.crop.x) <= SNAP && Math.abs(c.y - framed.crop.y) <= SNAP && Math.abs(c.size - framed.crop.size) <= SNAP);
+    if (near) return near;
+    // Elsewhere it must match clearly better than any layout: a Switch frame partly hidden behind a
+    // hand can match a little better a few pixels off.
+    const presetMatch = Math.max(...presets.map((p) => frameMatch(L, p.crop)));
+    if (framed.match > presetMatch + FRAME_BONUS) return found;
+  }
   // Otherwise search too. A known layout is kept unless the search fits clearly better: maps with
   // unexplored or sandy edges fit less cleanly, but sand AROUND the map can fake a preset.
   const found = searchCrop(img);
@@ -131,3 +152,10 @@ export function detectCrop(img: RGBAImage): { name: string; crop: Crop; likeness
 
 /** How much better a searched fit must be to override a known layout. */
 const PRESET_BONUS = 0.25;
+/**
+ * How much better a frame match must be to override a known layout when the edition is unknown.
+ * Switch shots have reached 0.04 with a hand over the frame; Java maps held lower, 0.08 and up.
+ */
+const FRAME_BONUS = 0.06;
+/** Half a map pixel, in frame pixels. */
+const SNAP = 2;
