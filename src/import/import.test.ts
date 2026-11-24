@@ -65,6 +65,15 @@ describe("detectCrop", () => {
     expect(Math.abs(got.size - SWITCH_CROP.size * k)).toBeLessThanOrEqual(10);
   });
 
+  it("finds a Java map whose top rows are unexplored, though they share the frame's tint", () => {
+    // level 4, Java Edition (F3 is on); the map's edges measured by hand from the full-size screenshot.
+    // A Switch layout is only 4½ pixels off it, close enough to fit almost as well.
+    const got = analyzeScreenshot(read("./fixtures/java/level4-unexplored-top.jpg"), 4).crop!, want = { x: 367, y: 64, size: 544.5 };
+    expect(Math.abs(got.x - want.x)).toBeLessThanOrEqual(2);
+    expect(Math.abs(got.y - want.y)).toBeLessThanOrEqual(2);
+    expect(Math.abs(got.size - want.size)).toBeLessThanOrEqual(3);
+  });
+
   it("finds no map in a screenshot without one", () => {
     const img = decode(Object.keys(fixtures)[0]);
     // paint over the whole picture with grass: no parchment frame anywhere
