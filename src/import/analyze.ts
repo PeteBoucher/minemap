@@ -26,6 +26,6 @@ export function analyzeScreenshot(img: RGBAImage, fallbackScale: number): Analys
   const bedrock = readPosition(img), java = bedrock ? null : readF3Position(img);
   const position = bedrock ?? java, edition = bedrock ? "bedrock" : java ? "java" : null;
   const crop = detectCrop(frame, edition)?.crop ?? null;
-  const placement = crop && position ? placeFromPosition(frame, crop, position, fallbackScale) : null;
+  const placement = crop && position ? placeFromPosition(frame, crop, position, fallbackScale, edition) : null;
   return { frame, crop, position, edition, placement };
 }

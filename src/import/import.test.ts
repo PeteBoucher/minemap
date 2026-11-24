@@ -214,6 +214,24 @@ describe("Java Edition screenshots", () => {
     for (const [k, want] of Object.entries({ left: 504, right: 1418.5, bottom: 1023 })) expect(Math.abs(got[k as keyof Edges] - want), k).toBeLessThanOrEqual(10);
   });
 
+  // Java lights the held map like any other item: under a roof the white player marker comes out
+  // cream, about (229, 209, 186), dimmed exactly as the frame is. Zoom levels worked out by hand from
+  // the Block line and where the marker is drawn.
+  it.each([
+    ["2026-11-24_10.39.18.jpg", { x: -832, z: -64, size: 256 }], // under a roof, level 1
+    ["2026-11-24_10.39.01.jpg", { x: -832, z: 64, size: 128 }], // under a roof, level 0
+    ["2026-11-24_10.31.07.jpg", { x: -320, z: -64, size: 256 }],
+    ["2026-11-24_10.32.09.jpg", { x: -576, z: -64, size: 512 }],
+    ["2026-11-24_10.34.24.jpg", { x: -576, z: -64, size: 512 }],
+    ["2026-11-24_10.35.40.jpg", { x: -576, z: -64, size: 512 }],
+    ["level4-unexplored-top.jpg", { x: -64, z: -64, size: 2048 }],
+  ])("places %s by its player marker, whatever the light", (file, want) => {
+    const a = analyzeScreenshot(readJava(file), 0);
+    expect(a.placement).toEqual({ ...want, basis: "marker" });
+    // and no other zoom level's spot looks like a marker
+    expect(checkScales(a.frame, a.crop!, a.position!, a.edition).filter((c) => c.found).map((c) => c.corner.size)).toEqual([want.size]);
+  });
+
   it("finds the map in a 32:9 screenshot as in a 16:9 one", () => {
     // a Switch screenshot with scenery-grey added on both sides: 2560×720
     const src = decode(DEMO_MAPS[0].file), W = 2560, data = new Uint8Array(W * 720 * 4).fill(90);
