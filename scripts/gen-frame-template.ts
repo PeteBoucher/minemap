@@ -12,7 +12,7 @@
 import fs from "node:fs";
 import jpeg from "jpeg-js";
 import type { Crop } from "../src/core/terrain";
-import { RING, RING_CELLS, RING_ROWS, TEMPLATE_CODE, TEMPLATE_MIN, TEMPLATE_STEP, findJavaMap, lumaPlane, parseTemplate, sample } from "../src/import/frame";
+import { RING, RING_CELLS, RING_ROWS, TEMPLATE_CODE, TEMPLATE_MIN, TEMPLATE_STEP, findFramedMap, lumaPlane, parseTemplate, sample } from "../src/import/frame";
 import { fitToFrame } from "../src/import/image";
 
 const DIR = "src/import/fixtures/java/";
@@ -54,7 +54,7 @@ let worst = 0;
 for (const file of all.keys()) {
   const t = parseTemplate(build([...all.keys()].filter((f) => f !== file)));
   const img = fitToFrame(jpeg.decode(fs.readFileSync(DIR + file), { useTArray: true, maxMemoryUsageInMB: 1024 }));
-  const got = findJavaMap(lumaPlane(img), t), want = crops[file];
+  const got = findFramedMap(lumaPlane(img), t), want = crops[file];
   const err = got ? Math.max(...(["x", "y", "size"] as const).map((k) => Math.abs(got.crop[k] - want[k]))) : Infinity;
   worst = Math.max(worst, err);
   console.log(`leave-one-out: ${file} ${got ? `off by ${err} px (match ${got.match.toFixed(3)})` : "not found"}`);

@@ -131,12 +131,19 @@ const JAVA: Record<string, { crop: Crop; block: Position | null }> = Object.from
   "2026-11-20_14.07.09.jpg": { x: 44, y: 95, z: 51 }, // chat line
   "2026-11-20_14.08.54.jpg": { x: -85, y: 72, z: 2 }, // in shade: the frame is grey-purple
   "2026-11-20_14.08.55.jpg": null, // in shade, chat line
-} as Record<string, Position | null>).map(([file, block]) => [file, { crop: (javaCrops as Record<string, Crop>)[file], block }]));
+} as Record<string, Position | null>).map(([file, block]) => {
+  const crop = (javaCrops as Record<string, Crop>)[file];
+  if (!crop) throw new Error(`${file} has no square in fixtures/java/crops.json`);
+  return [file, { crop, block }];
+}));
 
 // Java screenshots whose maps have unexplored edges. Unexplored map is drawn in the frame's parchment
 // tint, so only the edges that explored map reaches can be measured: by hand, in full-size pixels
 // (left/top: the map's first column/row; right/bottom: the frame's first, just past the map).
-// Where only three edges show, the fourth follows from the map being square (noted).
+// Where only three edges show, the fourth follows from the map being square (noted). Edges under
+// unexplored map can't be measured at all, so some screenshots pin only one or two.
+// On main, level4, 10.34.24 and 10.39.01 were found wrong; the others happened to sit at the Switch
+// layout and are here to keep them right.
 type Edges = Partial<Record<"left" | "top" | "right" | "bottom", number>>;
 const UNEXPLORED: Record<string, Edges> = {
   "level4-unexplored-top.jpg": { left: 529, top: 100, right: 1391, bottom: 962 }, // 1920×1142; top from the square
@@ -199,7 +206,8 @@ describe("Java Edition screenshots", () => {
   it("finds a map held at night while walking, though it is tilted and lit purple", () => {
     // 2026-11-24_10.39.40: the frame is a trapezoid here (its left edge runs from x=506 to 501 down the
     // map), which no square fits exactly. The square found is about 8 full-size pixels inside the
-    // map's lower edges, just over one map pixel; this pins it to within a map pixel and a half.
+    // map's lower edges, about 1.2 map pixels; this only pins it to within a map pixel and a half.
+    // Its top edge is under unexplored map and can't be measured.
     const img = readJava("2026-11-24_10.39.40.jpg"), crop = analyzeScreenshot(img, 0).crop;
     expect(crop).not.toBeNull();
     const got = cropEdges(crop!, img.width, img.height);

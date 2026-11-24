@@ -1,4 +1,4 @@
-// Finds a Java Edition held map by the texture of its frame.
+// Finds a held map by the texture of its parchment frame, as Java Edition draws it.
 //
 // Java draws the held map's parchment background 7/128 of the map's width beyond each edge, so the
 // frame is a fixed picture tied to the map's square, whatever the map shows. Matching it, rather than
@@ -113,14 +113,14 @@ export function frameMatch(L: Float32Array, c: Crop, { t = TEMPLATE, stride = 1,
 }
 
 /** Where to look: square sizes [from, to, step], the range for the square's centre x, top y [from, to], and the step. */
-interface Window { sizes: [number, number, number]; cx: [number, number]; y: [number, number]; step: number }
+interface SearchWindow { sizes: [number, number, number]; cx: [number, number]; y: [number, number]; step: number }
 /** Java draws a map held in both hands at a fixed field of view: about 540 wide, centred, near the top. */
-const BOTH_HANDS: Window = { sizes: [480, 620, 4], cx: [600, 680], y: [10, 140], step: 4 };
+const BOTH_HANDS: SearchWindow = { sizes: [480, 620, 4], cx: [600, 680], y: [10, 140], step: 4 };
 /** Anywhere else (a map held in one hand, or another layout). */
-const ANYWHERE: Window = { sizes: [280, 680, 16], cx: [0, FRAME_W], y: [8, 260], step: 8 };
+const ANYWHERE: SearchWindow = { sizes: [280, 680, 16], cx: [0, FRAME_W], y: [8, 260], step: 8 };
 
 /** The best-matching square in a window: a coarse pass on blurred brightness, then finer passes around its best few. */
-function searchWindow(L: Float32Array, B: Float32Array, w: Window, t: FrameTemplate): { crop: Crop; match: number } {
+function searchWindow(L: Float32Array, B: Float32Array, w: SearchWindow, t: FrameTemplate): { crop: Crop; match: number } {
   const coarse: { c: Crop; s: number }[] = [];
   for (let size = w.sizes[0]; size <= w.sizes[1]; size += w.sizes[2])
     for (let y = w.y[0]; y <= w.y[1] && y + size / 2 <= FRAME_H; y += w.step)
@@ -155,10 +155,10 @@ function searchWindow(L: Float32Array, B: Float32Array, w: Window, t: FrameTempl
 }
 
 /** Below this the square's surroundings don't look like a Java map frame. Real frames score 0.75–0.97; other screenshots below 0.4. */
-export const MIN_FRAME_MATCH = 0.6;
+const MIN_FRAME_MATCH = 0.6;
 
-/** The held map's square in a 1280×720 frame's brightness (see lumaPlane), or null if no Java map frame matches. */
-export function findJavaMap(L: Float32Array, t = TEMPLATE): { crop: Crop; match: number } | null {
+/** The held map's square, from a 1280×720 screenshot's brightness (see lumaPlane), or null if no map frame matches. */
+export function findFramedMap(L: Float32Array, t = TEMPLATE): { crop: Crop; match: number } | null {
   const B = blurPlane(L, 5);
   let found = searchWindow(L, B, BOTH_HANDS, t);
   if (found.match < MIN_FRAME_MATCH) found = searchWindow(L, B, ANYWHERE, t);
