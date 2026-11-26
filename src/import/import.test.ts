@@ -248,14 +248,19 @@ describe("Java Edition screenshots", () => {
   //   bottom. Only the left edge is checked: its top right is unexplored (the frame's tint), the
   //   hotbar covers the bottom edge, and a beach runs down the right edge (shaded sand is within
   //   this test's reach of the frame's light tone).
-  // - switch/tilted-looking-down (Bedrock on a Switch, 1280×720): (402, 167), (877, 167), bottom left
+  // - switch/2026112612523700 (Bedrock on a Switch, 1280×720): (402, 167), (877, 167), bottom left
   //   (322, 710); a beach hides the bottom right. 475 wide at the top, about 635 at the bottom. The
   //   hotbar covers the bottom edge and the beach the right, so the left and top are checked.
+  //   Three more from the same spot: 22600 is held lowest, its bottom corners a pixel or two past the
+  //   screenshot's bottom edge.
   type Edge = "top" | "bottom" | "left" | "right";
   it.each([
     ["java/2026-11-24_12.26.43.jpg", { top: [0, 128], bottom: [0, 128], left: [0, 128], right: [0, 128] }],
     ["java/2026-11-26_11.55.42.jpg", { left: [0, 128] }],
-    ["switch/tilted-looking-down.jpg", { top: [0, 128], left: [0, 128] }],
+    ["switch/2026112612523700.jpg", { top: [0, 128], left: [0, 128] }],
+    ["switch/2026112612522600.jpg", { top: [0, 120], left: [0, 128] }], // beach in the top right corner
+    ["switch/2026112612522800.jpg", { top: [0, 128], left: [0, 128] }],
+    ["switch/2026112612525700.jpg", { top: [0, 128], left: [0, 128] }],
   ] as [string, Partial<Record<Edge, [number, number]>>][])("straightens a map tilted by looking down while walking in %s", (file, edges) => {
     const a = analyzeScreenshot(read(`./fixtures/${file}`), 0), c = a.crop!;
     // the frame's two tones, light and shadow, read off these screenshots
