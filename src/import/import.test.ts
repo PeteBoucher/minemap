@@ -182,10 +182,11 @@ const HALF_MAP_PX = 2;
 
 /**
  * Measured squares of maps that are tilted (held lower): 14.04.33's left edge slants from x≈804 at
- * the top to ≈787 near the bottom, full-size pixels. These are stored straightened, into a square as
- * wide as the map is on average, so only where the square sits is still measured.
+ * the top to ≈787 near the bottom, full-size pixels; 14.04.36 is the same hold without F3. These are
+ * stored straightened, into a square as tall as the map is on screen, so only where the square
+ * sits is still measured.
  */
-const TILTED = new Set(["2026-11-20_14.04.33.jpg"]);
+const TILTED = new Set(["2026-11-20_14.04.33.jpg", "2026-11-20_14.04.36.jpg"]);
 
 describe("Java Edition screenshots", () => {
   it.each(Object.entries(JAVA))("finds the held map in %s", (file, { crop: want }) => {
@@ -228,7 +229,7 @@ describe("Java Edition screenshots", () => {
 
   it("finds a map held at night while walking, though it is tilted and lit purple", () => {
     // 2026-11-24_10.39.40: the frame is a trapezoid here (its left edge runs from x=506 to 501 down the
-    // map), so it is stored straightened, into a square as wide as the map is on average; this only
+    // map), so it is stored straightened, into a square as tall as the map is on screen; this only
     // pins that square to within a map pixel and a half of the lower edges measured.
     // Its top edge is under unexplored map and can't be measured.
     const img = readJava("2026-11-24_10.39.40.jpg"), crop = analyzeScreenshot(img, 0).crop;
@@ -247,12 +248,16 @@ describe("Java Edition screenshots", () => {
   //   bottom. Only the left edge is checked: its top right is unexplored (the frame's tint), the
   //   hotbar covers the bottom edge, and a beach runs down the right edge (shaded sand is within
   //   this test's reach of the frame's light tone).
+  // - switch/tilted-looking-down (Bedrock on a Switch, 1280×720): (402, 167), (877, 167), bottom left
+  //   (322, 710); a beach hides the bottom right. 475 wide at the top, about 635 at the bottom. The
+  //   hotbar covers the bottom edge and the beach the right, so the left and top are checked.
   type Edge = "top" | "bottom" | "left" | "right";
   it.each([
-    ["2026-11-24_12.26.43.jpg", { top: [0, 128], bottom: [0, 128], left: [0, 128], right: [0, 128] }],
-    ["2026-11-26_11.55.42.jpg", { left: [0, 128] }],
+    ["java/2026-11-24_12.26.43.jpg", { top: [0, 128], bottom: [0, 128], left: [0, 128], right: [0, 128] }],
+    ["java/2026-11-26_11.55.42.jpg", { left: [0, 128] }],
+    ["switch/tilted-looking-down.jpg", { top: [0, 128], left: [0, 128] }],
   ] as [string, Partial<Record<Edge, [number, number]>>][])("straightens a map tilted by looking down while walking in %s", (file, edges) => {
-    const a = analyzeScreenshot(readJava(file), 0), c = a.crop!;
+    const a = analyzeScreenshot(read(`./fixtures/${file}`), 0), c = a.crop!;
     // the frame's two tones, light and shadow, read off these screenshots
     const isFrame = ([r, g, b]: number[]) => [[215, 192, 150], [150, 135, 108]].some(([R, G, B]) => Math.hypot(r - R, g - G, b - B) < 25);
     const p = c.size / 128, at = (i: number, j: number) => rgb(a.frame, Math.floor(c.x + (i + 0.5) * p), Math.floor(c.y + (j + 0.5) * p));
@@ -281,6 +286,15 @@ describe("Java Edition screenshots", () => {
     expect(a.edition).toBe("java");
     expect(a.frame.data.filter((v, i) => v !== want[i]).length).toBe(0);
   });
+
+  // Maps held level sit exactly at a known Switch or iPhone layout. Fitting corners to their frames
+  // wanders more than on Java's (up to 5.5 frame pixels between opposite edges in these), so a map
+  // found at a layout is never straightened.
+  it.each([...Object.keys(fixtures).map((f) => `../../public/demo/${f}`), "./fixtures/ios/IMG_3768.jpg", "./fixtures/ios/IMG_3775.jpg"])(
+    "stores the level Bedrock map in %s as taken", (path) => {
+      const img = read(path), got = analyzeScreenshot(img, 0).frame.data, want = fitToFrame(img).data;
+      expect(got.filter((v, i) => v !== want[i]).length).toBe(0);
+    });
 
   // Straightening resamples the map, so it must leave maps that aren't tilted exactly as taken.
   it.each(Object.keys(JAVA).filter((f) => !TILTED.has(f)))("stores the untilted map in %s as taken", (file) => {

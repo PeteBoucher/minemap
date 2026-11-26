@@ -1,7 +1,7 @@
 // One call that works out everything the importer can tell from a screenshot.
 import type { Edition } from "../core/edition";
 import type { Crop } from "../core/terrain";
-import { detectCrop } from "./crop";
+import { CROP_CANDIDATES, detectCrop } from "./crop";
 import { readF3Position } from "./f3";
 import { type RGBAImage, fitToFrame } from "./image";
 import { type Position, readPosition } from "./ocr";
@@ -26,9 +26,11 @@ export function analyzeScreenshot(img: RGBAImage, fallbackScale: number): Analys
   const fitted = fitToFrame(img);
   const bedrock = readPosition(img), java = bedrock ? null : readF3Position(img);
   const position = bedrock ?? java, edition = bedrock ? "bedrock" : java ? "java" : null;
-  const found = detectCrop(fitted, edition)?.crop ?? null;
-  // Java draws the held map in perspective, so walking can tilt it (Bedrock's layouts are fixed)
-  const { frame, crop } = found && edition === "java" ? straighten(fitted, found) : { frame: fitted, crop: found };
+  const found = detectCrop(fitted, edition);
+  // Looking down while walking tilts the held map (Java and Bedrock alike); one found exactly at a
+  // known layout is held level, and fitting corners to it would only add noise.
+  const level = !found || CROP_CANDIDATES.some((c) => c.name === found.name);
+  const { frame, crop } = level ? { frame: fitted, crop: found?.crop ?? null } : straighten(fitted, found.crop);
   const placement = crop && position ? placeFromPosition(frame, crop, position, fallbackScale, edition) : null;
   return { frame, crop, position, edition, placement };
 }

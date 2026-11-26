@@ -1,8 +1,8 @@
-// Straightens a held map that Java drew tilted, so it can be stored and drawn as a square.
+// Straightens a held map drawn tilted, so it can be stored and drawn as a square.
 //
-// Looking down or up while walking tilts the held map, and Java draws it as a trapezoid. A square crop
-// then takes in wedges of the frame at two corners (which show as parchment between neighbouring
-// maps) and reads terrain near the others from the wrong map pixels. So the map's corners are fitted
+// Looking down or up while walking tilts the held map, in Java and Bedrock alike, and it's drawn as a
+// trapezoid. A square crop then takes in wedges of the frame at two corners (which show as parchment
+// between neighbouring maps) and reads terrain near the others from the wrong map pixels. So the map's corners are fitted
 // to the frame (frame.ts), and the square is redrawn from the trapezoid through the perspective
 // between them. Everything after (placement, terrain, thumbnails, drawing) sees a plain square.
 import type { Crop } from "../core/terrain";
@@ -27,8 +27,9 @@ export function straighten(frame: RGBAImage, crop: Crop): { frame: RGBAImage; cr
   const top = x1 - x0, bottom = x2 - x3, left = y3 - y0, right = y2 - y1;
   if (match < MIN_MATCH || (Math.abs(top - bottom) < MIN_TILT && Math.abs(left - right) < MIN_TILT)) return { frame, crop };
 
-  // the square: as wide as the trapezoid on average, centred on it, from its top
-  const size = (top + bottom) / 2, c = { x: (x0 + x1 + x2 + x3) / 4 - size / 2, y: (y0 + y1) / 2, size };
+  // the square: as tall as the map is on screen (so it stays on the screenshot when the map does),
+  // centred on it, from its top
+  const size = (left + right) / 2, c = { x: (x0 + x1 + x2 + x3) / 4 - size / 2, y: (y0 + y1) / 2, size };
   // the whole map and the square must be on the screenshot: off it there's nothing to redraw from
   // (a map tilted far enough runs off the bottom; #36)
   const inside = (x: number, y: number) => x >= 0 && y >= 0 && x <= FRAME_W && y <= FRAME_H;
