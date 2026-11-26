@@ -29,6 +29,10 @@ export function straighten(frame: RGBAImage, crop: Crop): { frame: RGBAImage; cr
 
   // the square: as wide as the trapezoid on average, centred on it, from its top
   const size = (top + bottom) / 2, c = { x: (x0 + x1 + x2 + x3) / 4 - size / 2, y: (y0 + y1) / 2, size };
+  // the whole map and the square must be on the screenshot: off it there's nothing to redraw from
+  // (a map tilted far enough runs off the bottom; #36)
+  const inside = (x: number, y: number) => x >= 0 && y >= 0 && x <= FRAME_W && y <= FRAME_H;
+  if (!q.every(([x, y]) => inside(x, y)) || !inside(c.x, c.y) || !inside(c.x + size, c.y + size)) return { frame, crop };
   const at = perspective(q), src = frame.data, out = new Uint8Array(src);
   const cx0 = Math.max(0, Math.floor(c.x)), cx1 = Math.min(FRAME_W, Math.ceil(c.x + size));
   const cy0 = Math.max(0, Math.floor(c.y)), cy1 = Math.min(FRAME_H, Math.ceil(c.y + size));

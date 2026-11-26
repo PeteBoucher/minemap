@@ -271,6 +271,17 @@ describe("Java Edition screenshots", () => {
     expect(got.filter((v, i) => v !== want[i]).length).toBe(0);
   });
 
+  // A map whose bottom is below the screenshot can't be straightened: the rows that would fill the
+  // square aren't there. 12.26.43 cut off at row 1000 loses its bottom edge (row 1033) and the frame
+  // below it, so it must be stored as taken, not filled with copies of the last row.
+  it("doesn't straighten a tilted map that runs off the bottom of the screenshot", () => {
+    const src = readJava("2026-11-24_12.26.43.jpg"), H = 1000;
+    const img = { width: src.width, height: H, data: src.data.slice(0, src.width * H * 4) };
+    const a = analyzeScreenshot(img, 0), want = fitToFrame(img).data;
+    expect(a.edition).toBe("java");
+    expect(a.frame.data.filter((v, i) => v !== want[i]).length).toBe(0);
+  });
+
   // Straightening resamples the map, so it must leave maps that aren't tilted exactly as taken.
   it.each(Object.keys(JAVA).filter((f) => !TILTED.has(f)))("stores the untilted map in %s as taken", (file) => {
     const img = readJava(file);
