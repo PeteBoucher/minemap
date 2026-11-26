@@ -99,19 +99,27 @@ export function frameMatch(L: Float32Array, c: Crop, { t = TEMPLATE, stride = 1,
   return matchAt(L, (u, v) => [c.x + u * p, c.y + v * p], t, stride, coarse);
 }
 
-/** frameMatch with the template's cells placed by `at`, from map pixels (0–128 across the map) to the frame. */
-function matchAt(L: Float32Array, at: (u: number, v: number) => [number, number], t: FrameTemplate, stride = 1, coarse = false): number {
+/**
+ * frameMatch with the template's cells placed by `at`, from map pixels (0–128 across the map) to the
+ * frame. Up to `offShare` of the cells may fall off the screenshot and are left out (a map tilted far
+ * enough runs off its bottom); any more and there's no match (-1).
+ */
+function matchAt(L: Float32Array, at: (u: number, v: number) => [number, number], t: FrameTemplate, stride = 1, coarse = false, offShare = 0): number {
   const want = coarse ? t.blurred : t.sharp;
+  let off = 0;
   sums.fill(0);
   for (let k = 0; k < want.length; k += stride) {
     const [x, y] = at(t.u[k], t.v[k]), a = sample(L, x, y, !coarse);
-    if (a !== a) return -1; // the frame runs off the screenshot
+    if (a !== a) { off++; continue; }
     const b = want[k], o = t.side[k] * 6;
     sums[o]++; sums[o + 1] += a; sums[o + 2] += b; sums[o + 3] += a * a; sums[o + 4] += b * b; sums[o + 5] += a * b;
   }
+  if (off > offShare * (want.length / stride)) return -1;
   let total = 0;
   for (let o = 0; o < 18; o += 6) {
-    const n = sums[o], cov = sums[o + 5] - (sums[o + 1] * sums[o + 2]) / n;
+    const n = sums[o];
+    if (n < 2) return -1;
+    const cov = sums[o + 5] - (sums[o + 1] * sums[o + 2]) / n;
     const va = sums[o + 3] - sums[o + 1] ** 2 / n, vb = sums[o + 4] - sums[o + 2] ** 2 / n;
     total += va > 1e-6 ? cov / Math.sqrt(va * vb) : 0;
   }
@@ -136,26 +144,47 @@ export function perspective(q: Corners): (u: number, v: number) => [number, numb
   };
 }
 
+/** Ways to move the corners while fitting: each corner on its own, and together as the tilt changes them. */
+const CORNER_MOVES: ((q: Corners, d: number) => void)[] = [
+  ...[0, 1, 2, 3].flatMap((i) => [0, 1].map((j) => (q: Corners, d: number) => { q[i][j] += d; })),
+  (q, d) => q.forEach((p) => { p[0] += d; }), // the whole map sideways
+  (q, d) => q.forEach((p) => { p[1] += d; }), // up or down
+  (q, d) => { q[0][0] -= d; q[1][0] += d; }, // the top wider
+  (q, d) => { q[3][0] -= d; q[2][0] += d; }, // the bottom wider
+  (q, d) => { q[2][1] += d; q[3][1] += d; }, // taller
+];
+/** Share of the frame that may be off the screenshot while fitting corners. */
+const FIT_OFF_SHARE = 0.3;
+
 /**
- * The map's corners, fitted from square `c`: each corner is moved on its own while the frame
- * matches better. Looking down or up while walking tilts a held map, and Java then draws it as a
- * trapezoid, which no square fits. Untilted maps come back within a pixel or two of the square.
+ * The map's corners, fitted from square `c`. Looking down or up while walking tilts a held map, and
+ * Java then draws it as a trapezoid, which no square fits: tilted far, its top can be a quarter
+ * narrower than its bottom. The corners are moved, alone and together, while the frame matches
+ * better: in big steps on blurred brightness first (so the fit isn't caught on the frame's notches
+ * far from the answer), then in small steps on the real thing. Untilted maps come back within a
+ * pixel or two of the square.
  */
 export function fitCorners(L: Float32Array, c: Crop, t = TEMPLATE): { corners: Corners; match: number } {
   let q: Corners = [[c.x, c.y], [c.x + c.size, c.y], [c.x + c.size, c.y + c.size], [c.x, c.y + c.size]];
-  const score = (q: Corners) => { const at = perspective(q); return matchAt(L, (u, v) => at(u / 128, v / 128), t); };
-  let s = score(q);
-  for (const step of [2, 1, 0.5, 0.25])
-    for (let improved = true; improved;) {
-      improved = false;
-      for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) for (const d of [step, -step]) {
-        const n = q.map((p) => [...p]) as Corners;
-        n[i][j] += d;
-        const ns = score(n);
-        if (ns > s + 1e-9) { q = n; s = ns; improved = true; }
+  const B = blurPlane(L, 3);
+  const score = (P: Float32Array, q: Corners, coarse: boolean) => {
+    const at = perspective(q);
+    return matchAt(P, (u, v) => at(u / 128, v / 128), t, 1, coarse, FIT_OFF_SHARE);
+  };
+  for (const [P, coarse, steps] of [[B, true, [16, 8, 4]], [L, false, [2, 1, 0.5, 0.25]]] as const) {
+    let s = score(P, q, coarse);
+    for (const step of steps)
+      for (let improved = true; improved;) {
+        improved = false;
+        for (const move of CORNER_MOVES) for (const d of [step, -step]) {
+          const n = q.map((p) => [...p]) as Corners;
+          move(n, d);
+          const ns = score(P, n, coarse);
+          if (ns > s + 1e-9) { q = n; s = ns; improved = true; }
+        }
       }
-    }
-  return { corners: q, match: s };
+  }
+  return { corners: q, match: score(L, q, false) };
 }
 
 /** Where to look: square sizes [from, to, step], the range for the square's centre x, top y [from, to], and the step. */

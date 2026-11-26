@@ -237,19 +237,29 @@ describe("Java Edition screenshots", () => {
     for (const [k, want] of Object.entries({ left: 504, right: 1418.5, bottom: 1023 })) expect(Math.abs(got[k as keyof Edges] - want), k).toBeLessThanOrEqual(10);
   });
 
-  // 2026-11-24_12.26.43: looking down while walking tilts the map into a trapezoid. Measured by hand
-  // (full-size pixels, the map's own corners): top left (518, 131), top right (1402, 131), bottom
-  // left (497, 1033), bottom right (1424, 1033), so 884 wide at the top and 927 at the bottom. A
-  // square crop takes in wedges of frame at the top corners, which show between maps; the map is
-  // stored straightened, so every map pixel along the crop's edges is map, explored all round here.
-  it("straightens a map tilted by looking down while walking", () => {
-    const a = analyzeScreenshot(readJava("2026-11-24_12.26.43.jpg"), 0), c = a.crop!;
-    // the frame's two tones, light and shadow, read off this screenshot
+  // Looking down while walking tilts the map into a trapezoid. A square crop takes in wedges of
+  // frame at the top corners, which show between maps; the map is stored straightened, so the map
+  // pixels along the crop's edges are map. Corners measured by hand (full-size pixels, the map's own):
+  // - 2026-11-24_12.26.43: (518, 131), (1402, 131), (1424, 1033), (497, 1033): 884 wide at the top,
+  //   927 at the bottom; explored all round.
+  // - 2026-11-26_11.55.42, tilted far: top left (884, 427), top right (2142, 425), bottom left
+  //   (680, 1862); the right edge is at x≈2250 on row 1200. 1258 wide at the top, about 1660 at the
+  //   bottom. Only the left edge is checked: its top right is unexplored (the frame's tint), the
+  //   hotbar covers the bottom edge, and a beach runs down the right edge (shaded sand is within
+  //   this test's reach of the frame's light tone).
+  type Edge = "top" | "bottom" | "left" | "right";
+  it.each([
+    ["2026-11-24_12.26.43.jpg", { top: [0, 128], bottom: [0, 128], left: [0, 128], right: [0, 128] }],
+    ["2026-11-26_11.55.42.jpg", { left: [0, 128] }],
+  ] as [string, Partial<Record<Edge, [number, number]>>][])("straightens a map tilted by looking down while walking in %s", (file, edges) => {
+    const a = analyzeScreenshot(readJava(file), 0), c = a.crop!;
+    // the frame's two tones, light and shadow, read off these screenshots
     const isFrame = ([r, g, b]: number[]) => [[215, 192, 150], [150, 135, 108]].some(([R, G, B]) => Math.hypot(r - R, g - G, b - B) < 25);
     const p = c.size / 128, at = (i: number, j: number) => rgb(a.frame, Math.floor(c.x + (i + 0.5) * p), Math.floor(c.y + (j + 0.5) * p));
+    const cell: Record<Edge, (k: number) => [number, number]> = { top: (k) => [k, 0], bottom: (k) => [k, 127], left: (k) => [0, k], right: (k) => [127, k] };
     const onFrame: string[] = [];
-    for (let k = 0; k < 128; k++)
-      for (const [i, j] of [[k, 0], [k, 127], [0, k], [127, k]]) if (isFrame(at(i, j))) onFrame.push(`${i},${j}`);
+    for (const [edge, [from, to]] of Object.entries(edges) as [Edge, [number, number]][])
+      for (let k = from; k < to; k++) if (isFrame(at(...cell[edge](k)))) onFrame.push(`${edge} ${k}`);
     expect(onFrame).toEqual([]);
   });
 
