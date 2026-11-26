@@ -86,7 +86,8 @@ svg#map text{font-family:var(--mono);fill:var(--muted)}
 /* add / edit form */
 #placeForm{display:grid;grid-template-columns:1fr 70px 70px auto;gap:6px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
 #placeForm h2{grid-column:1/-1;margin:0 0 2px}
-@media (max-width:420px){#placeForm{grid-template-columns:1fr 1fr}}
+/* phones: Name gets its own row so X, Z and Add stay together on the next */
+@media (max-width:420px){#placeForm{grid-template-columns:1fr 1fr auto}#placeForm #newName{grid-column:1/-1}}
 /* contain:inline-size: the options row wraps within its columns instead of widening the auto one, which squeezed Name and Biome */
 #placeForm .opts{grid-column:2/-1;contain:inline-size;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:.88rem;color:var(--muted)}
 #placeForm .opts label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
