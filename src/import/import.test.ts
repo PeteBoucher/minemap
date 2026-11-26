@@ -3,7 +3,7 @@ import jpeg from "jpeg-js";
 import { describe, expect, it } from "vitest";
 import { type Crop, SWITCH_CROP, drawnPart } from "../core/terrain";
 import { DEMO_MAPS } from "../store/demoWorld";
-import { analyzeScreenshot } from "./analyze";
+import { analyzeScreenshot, keepsOriginal } from "./analyze";
 import { detectCrop } from "./crop";
 import javaCrops from "./fixtures/java/crops.json";
 import { fitToFrame, frameRect, rgb } from "./image";
@@ -100,6 +100,7 @@ describe("analyzeScreenshot", () => {
       position: { x: 796, y: 78, z: 1676 },
       edition: "bedrock",
       placement: { x: -64, z: -64, size: 2048, basis: "marker" },
+      straightened: false,
     });
   });
 });
@@ -335,5 +336,26 @@ describe("Java Edition screenshots", () => {
 
   it("finds no map in a 1920×1200 screenshot with F3 open and a sword in hand", () => {
     expect(analyzeScreenshot(readJava("2026-11-20_13.43.40.jpg"), 0).crop).toBeNull();
+  });
+});
+
+// The importer keeps the screenshot file as taken when it's already the frame (a Switch's 1280×720
+// JPEG), to avoid re-encoding it. A straightened map must be stored as straightened, or the square
+// is drawn over the tilted original, wedges and all.
+describe("keepsOriginal", () => {
+  const jpeg = { type: "image/jpeg" };
+  it("keeps a level Switch screenshot as taken", () => {
+    const img = decode("2026110415391900-11B64E28AD7A49CA9EC8AC007BE858C6.jpg");
+    expect(keepsOriginal(jpeg, img, analyzeScreenshot(img, 0))).toBe(true);
+  });
+
+  it.each(["2026112612523700.jpg", "2026112612525700.jpg"])("stores the straightened copy of tilted Switch screenshot %s", (file) => {
+    const img = read(`./fixtures/switch/${file}`);
+    expect(keepsOriginal(jpeg, img, analyzeScreenshot(img, 0))).toBe(false);
+  });
+
+  it("stores the fitted copy of a screenshot of another size", () => {
+    const img = readJava("2026-11-20_14.00.44.jpg");
+    expect(keepsOriginal(jpeg, img, analyzeScreenshot(img, 0))).toBe(false);
   });
 });
