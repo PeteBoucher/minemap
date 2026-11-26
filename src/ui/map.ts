@@ -4,7 +4,7 @@ import { Fingers } from "../core/fingers";
 import { PageDrag, dragAction } from "../core/pageDrag";
 import { biomeCol } from "../core/biomes";
 import { placeLabels } from "../core/labels";
-import { SWITCH_CROP } from "../core/terrain";
+import { SWITCH_CROP, drawnPart } from "../core/terrain";
 import { FRAME_H, FRAME_W } from "../import/image";
 import { type BiomePin, biomeAt, reachCovers, reachOutline } from "../core/travel";
 import type { MapShot, Place } from "../store/db";
@@ -101,7 +101,7 @@ export class MapView {
       model.maps.slice().sort((a, b) => b.size - a.size).forEach((m, i) => {
         const href = model.imageUrl(m.imageId);
         if (!href) return;
-        const C = m.crop ?? SWITCH_CROP, cp = el("clipPath", { id: "mapCrop" + i });
+        const C = drawnPart(m.crop ?? SWITCH_CROP), cp = el("clipPath", { id: "mapCrop" + i });
         cp.append(el("rect", { x: C.x, y: C.y, width: C.size, height: C.size }));
         svg.append(cp);
         svg.append(el("image", {

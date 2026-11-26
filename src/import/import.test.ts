@@ -1,12 +1,12 @@
 import fs from "node:fs";
 import jpeg from "jpeg-js";
 import { describe, expect, it } from "vitest";
-import { type Crop, SWITCH_CROP } from "../core/terrain";
+import { type Crop, SWITCH_CROP, drawnPart } from "../core/terrain";
 import { DEMO_MAPS } from "../store/demoWorld";
 import { analyzeScreenshot } from "./analyze";
 import { detectCrop } from "./crop";
 import javaCrops from "./fixtures/java/crops.json";
-import { frameRect } from "./image";
+import { fitToFrame, frameRect } from "./image";
 import fixtures from "./ocr.fixtures.json";
 import { type Position, positionFromText, readPosition } from "./ocr";
 import { checkScales, placeFromPosition } from "./place";
@@ -72,6 +72,21 @@ describe("detectCrop", () => {
     // paint over the whole picture with grass: no parchment frame anywhere
     for (let i = 0; i < img.data.length; i += 4) { img.data[i] = 96; img.data[i + 1] = 144; img.data[i + 2] = 48; }
     expect(detectCrop(img)).toBeNull();
+  });
+});
+
+// iPhone Bedrock holds the map a pixel inside the Switch layout, which is still the closest match:
+// the crop's left column and its top and bottom rows are (partly) the map's frame, and drawn they
+// show as a pale line between maps. Measured on these shots: the map fills columns 369–911 and
+// rows 60–602 of the frame.
+describe("drawnPart", () => {
+  it.each(["IMG_3768.jpg", "IMG_3775.jpg"])("keeps to the map itself in iPhone shot %s", (file) => {
+    const c = drawnPart(detectCrop(fitToFrame(read(`./fixtures/ios/${file}`)))!.crop);
+    expect(c.x).toBeGreaterThanOrEqual(369);
+    expect(c.y).toBeGreaterThanOrEqual(60);
+    expect(c.x + c.size).toBeLessThanOrEqual(912);
+    expect(c.y + c.size).toBeLessThanOrEqual(603);
+    expect(c.size).toBeGreaterThan(543 - 4); // loses less than a map pixel (4¼ frame pixels)
   });
 });
 

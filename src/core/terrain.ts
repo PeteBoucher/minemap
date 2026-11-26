@@ -11,6 +11,19 @@ export interface Crop { x: number; y: number; size: number }
 /** Where the map square sits in a 1280×720 Switch screenshot of a held map. */
 export const SWITCH_CROP: Crop = { x: 368, y: 59.5, size: 544 };
 
+/** How far in from each edge of its crop a map is drawn, in frame pixels. */
+export const FRAME_INSET = 1;
+
+/**
+ * The part of a crop that's drawn on the map: FRAME_INSET in from each edge. The crop's edge
+ * pixels can be partly the map's frame (on iPhone, which holds the map a pixel inside the Switch
+ * layout, a whole column of it), and drawn they show as a pale line between neighbouring maps.
+ * The map is drawn stretched over its whole square, by about 0.4%, so neighbours still meet.
+ */
+export function drawnPart(crop: Crop): Crop {
+  return { x: crop.x + FRAME_INSET, y: crop.y + FRAME_INSET, size: crop.size - 2 * FRAME_INSET };
+}
+
 /** A map screenshot placed in the world: north-west corner (x, z) and blocks across. */
 export interface PlacedMap { x: number; z: number; size: number; crop?: Crop }
 
