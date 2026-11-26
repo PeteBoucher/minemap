@@ -101,7 +101,6 @@ export class MapView {
       model.maps.slice().sort((a, b) => b.size - a.size).forEach((m, i) => {
         const href = model.imageUrl(m.imageId);
         if (!href) return;
-        // the drawn part is stretched over the whole map's square (by about 0.4%) so neighbours still meet
         const C = drawnPart(m.crop ?? SWITCH_CROP), cp = el("clipPath", { id: "mapCrop" + i });
         cp.append(el("rect", { x: C.x, y: C.y, width: C.size, height: C.size }));
         svg.append(cp);
