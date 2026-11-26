@@ -2,6 +2,8 @@ import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
+  // which build this is: Preview builds show their commit (src/core/build.ts)
+  define: { __BUILD__: JSON.stringify({ env: process.env.VERCEL_ENV ?? "", sha: process.env.VERCEL_GIT_COMMIT_SHA ?? "" }) },
   plugins: [
     VitePWA({
       registerType: "autoUpdate",

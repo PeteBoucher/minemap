@@ -20,6 +20,7 @@ import { terrainFor } from "./ui/terrain";
 import { analyticsAvailable, currentConsent, feedbackAvailable, initAnalytics, setConsent } from "./ui/analytics";
 import { openFeedback } from "./ui/feedback";
 import type { Answer } from "./core/consent";
+import { previewCommit } from "./core/build";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -390,6 +391,15 @@ $("feedbackLink").onclick = openFeedback;
 $("feedbackTab").onclick = openFeedback;
 // Hidden in a build without a PostHog key: there's nowhere to send it.
 $("feedbackTab").hidden = $("feedbackFoot").hidden = !feedbackAvailable;
+{
+  const commit = previewCommit(__BUILD__);
+  if (commit) {
+    const a = $("buildCommit") as HTMLAnchorElement;
+    a.textContent = commit;
+    a.href = `https://github.com/PeteBoucher/minemap/commit/${__BUILD__.sha}`;
+    $("buildTag").hidden = false;
+  }
+}
 document.querySelectorAll<HTMLElement>("#worldMenu .feedback-item").forEach((e) => (e.hidden = !feedbackAvailable));
 initAnalytics();
 
