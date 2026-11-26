@@ -6,7 +6,7 @@ import { DEMO_MAPS } from "../store/demoWorld";
 import { analyzeScreenshot } from "./analyze";
 import { detectCrop } from "./crop";
 import javaCrops from "./fixtures/java/crops.json";
-import { fitToFrame, frameRect } from "./image";
+import { fitToFrame, frameRect, rgb } from "./image";
 import fixtures from "./ocr.fixtures.json";
 import { type Position, positionFromText, readPosition } from "./ocr";
 import { checkScales, placeFromPosition } from "./place";
@@ -180,12 +180,20 @@ const readJava = (file: string) => read(`./fixtures/java/${file}`);
 /** Half a map pixel: 543 / 128 ≈ 4.2 frame pixels per map pixel. */
 const HALF_MAP_PX = 2;
 
+/**
+ * Measured squares of maps that are tilted (held lower): 14.04.33's left edge slants from x≈804 at
+ * the top to ≈787 near the bottom, full-size pixels. These are stored straightened, into a square as
+ * wide as the map is on average, so only where the square sits is still measured.
+ */
+const TILTED = new Set(["2026-11-20_14.04.33.jpg"]);
+
 describe("Java Edition screenshots", () => {
   it.each(Object.entries(JAVA))("finds the held map in %s", (file, { crop: want }) => {
     const a = analyzeScreenshot(readJava(file), 0);
     expect([a.frame.width, a.frame.height]).toEqual([1280, 720]);
     expect(a.crop).not.toBeNull();
-    for (const k of ["x", "y", "size"] as const) expect(Math.abs(a.crop![k] - want[k])).toBeLessThanOrEqual(HALF_MAP_PX);
+    for (const k of TILTED.has(file) ? (["x", "y"] as const) : (["x", "y", "size"] as const))
+      expect(Math.abs(a.crop![k] - want[k]), k).toBeLessThanOrEqual(HALF_MAP_PX);
   });
 
   // These screenshots are also what f3Glyphs.ts was learned from, so this shows the glyphs fit them;
@@ -220,13 +228,44 @@ describe("Java Edition screenshots", () => {
 
   it("finds a map held at night while walking, though it is tilted and lit purple", () => {
     // 2026-11-24_10.39.40: the frame is a trapezoid here (its left edge runs from x=506 to 501 down the
-    // map), which no square fits exactly. The square found is about 8 full-size pixels inside the
-    // map's lower edges, about 1.2 map pixels; this only pins it to within a map pixel and a half.
+    // map), so it is stored straightened, into a square as wide as the map is on average; this only
+    // pins that square to within a map pixel and a half of the lower edges measured.
     // Its top edge is under unexplored map and can't be measured.
     const img = readJava("2026-11-24_10.39.40.jpg"), crop = analyzeScreenshot(img, 0).crop;
     expect(crop).not.toBeNull();
     const got = cropEdges(crop!, img.width, img.height);
     for (const [k, want] of Object.entries({ left: 504, right: 1418.5, bottom: 1023 })) expect(Math.abs(got[k as keyof Edges] - want), k).toBeLessThanOrEqual(10);
+  });
+
+  // 2026-11-24_12.26.43: looking down while walking tilts the map into a trapezoid. Measured by hand
+  // (full-size pixels, the map's own corners): top left (518, 131), top right (1402, 131), bottom
+  // left (497, 1033), bottom right (1424, 1033), so 884 wide at the top and 927 at the bottom. A
+  // square crop takes in wedges of frame at the top corners, which show between maps; the map is
+  // stored straightened, so every map pixel along the crop's edges is map, explored all round here.
+  it("straightens a map tilted by looking down while walking", () => {
+    const a = analyzeScreenshot(readJava("2026-11-24_12.26.43.jpg"), 0), c = a.crop!;
+    // the frame's two tones, light and shadow, read off this screenshot
+    const isFrame = ([r, g, b]: number[]) => [[215, 192, 150], [150, 135, 108]].some(([R, G, B]) => Math.hypot(r - R, g - G, b - B) < 25);
+    const p = c.size / 128, at = (i: number, j: number) => rgb(a.frame, Math.floor(c.x + (i + 0.5) * p), Math.floor(c.y + (j + 0.5) * p));
+    const onFrame: string[] = [];
+    for (let k = 0; k < 128; k++)
+      for (const [i, j] of [[k, 0], [k, 127], [0, k], [127, k]]) if (isFrame(at(i, j))) onFrame.push(`${i},${j}`);
+    expect(onFrame).toEqual([]);
+  });
+
+  // 2026-11-24_10.56.22: at night, with unexplored map along every edge, the frame's corners fit
+  // poorly and come out a little wider at the top. The frame's outer edges are straight (x≈458 and
+  // ≈1462 full-size, top to bottom), so it isn't tilted and must be stored as taken.
+  it("leaves alone a map whose corners can't be fitted surely (night, unexplored edges)", () => {
+    const img = readJava("2026-11-24_10.56.22.jpg"), got = analyzeScreenshot(img, 0).frame.data, want = fitToFrame(img).data;
+    expect(got.filter((v, i) => v !== want[i]).length).toBe(0);
+  });
+
+  // Straightening resamples the map, so it must leave maps that aren't tilted exactly as taken.
+  it.each(Object.keys(JAVA).filter((f) => !TILTED.has(f)))("stores the untilted map in %s as taken", (file) => {
+    const img = readJava(file);
+    const got = analyzeScreenshot(img, 0).frame.data, want = fitToFrame(img).data;
+    expect(got.filter((v, i) => v !== want[i]).length).toBe(0);
   });
 
   // Java lights the held map like any other item: under a roof the white player marker comes out

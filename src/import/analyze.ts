@@ -6,6 +6,7 @@ import { readF3Position } from "./f3";
 import { type RGBAImage, fitToFrame } from "./image";
 import { type Position, readPosition } from "./ocr";
 import { type Placement, placeFromPosition } from "./place";
+import { straighten } from "./straighten";
 
 export interface Analysis {
   /** The screenshot fitted into the 1280×720 frame: what gets stored, and what `crop` refers to. */
@@ -22,10 +23,12 @@ export interface Analysis {
 
 /** `img` is the screenshot as taken, any size: text is read at full size, the map found in the frame. */
 export function analyzeScreenshot(img: RGBAImage, fallbackScale: number): Analysis {
-  const frame = fitToFrame(img);
+  const fitted = fitToFrame(img);
   const bedrock = readPosition(img), java = bedrock ? null : readF3Position(img);
   const position = bedrock ?? java, edition = bedrock ? "bedrock" : java ? "java" : null;
-  const crop = detectCrop(frame, edition)?.crop ?? null;
+  const found = detectCrop(fitted, edition)?.crop ?? null;
+  // Java draws the held map in perspective, so walking can tilt it (Bedrock's layouts are fixed)
+  const { frame, crop } = found && edition === "java" ? straighten(fitted, found) : { frame: fitted, crop: found };
   const placement = crop && position ? placeFromPosition(frame, crop, position, fallbackScale, edition) : null;
   return { frame, crop, position, edition, placement };
 }
