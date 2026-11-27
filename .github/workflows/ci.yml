@@ -23,3 +23,6 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      # Imports tilted screenshots through the real dialog in the build and checks they're stored straightened
+      - run: npx playwright install --with-deps --only-shell chromium
+      - run: npm run e2e:straighten
