@@ -65,7 +65,7 @@ const LINE_END = 12;
 const LEFT = 0.5;
 /** ... its first line within the top tenth, and the coordinates well inside the top 60%. */
 const FIRST_LINE_ZONE = 0.1, LINES_ZONE = 0.6;
-/** A row with under 1/LINE_FADE of a line's busiest row's text pixels is past the line. */
+/** A row with under 1/LINE_FADE of a line's busiest row's text pixels is outside the line: past it, or above it. */
 const LINE_FADE = 4;
 
 /**
@@ -87,14 +87,18 @@ export function f3Lines(img: RGBAImage): F3Glyph[][] {
 /** The top line's first row and font pixel size, or null if the top left has no F3-like text. */
 function firstLine(img: RGBAImage, x1: number): { y0: number; s: number } | null {
   let start = -1, peak = 0;
+  const boxedPerRow: number[] = [];
   for (let y = 0; y < img.height * FIRST_LINE_ZONE; y++) {
     let n = 0;
     for (let x = 0; x < x1; x++) if (isBoxedText(img, x, y)) n++;
+    boxedPerRow[y] = n;
     if (n >= 3 && start < 0) { start = y; peak = 0; }
     peak = Math.max(peak, n);
     // a busy scene (snow among rock) leaves a scatter of text-like pixels between lines: a row
     // far sparser than the line's busiest has left the line
     if (start >= 0 && (n < 3 || n < peak / LINE_FADE)) {
+      // ... or, just above it, isn't the line yet: the line starts at its first busy row
+      while (boxedPerRow[start] < peak / LINE_FADE) start++;
       const s = strokeWidth(img, start, y - 1, x1), rows = (y - start) / s;
       // a line is CAP_ROWS font pixels high, or ROWS with descenders
       if (s >= 1 && Math.round(rows) >= CAP_ROWS && Math.round(rows) <= ROWS) return { y0: start, s };

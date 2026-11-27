@@ -212,6 +212,8 @@ describe("Java Edition screenshots", () => {
     ["f3-over-white-snow.jpg", { x: 617, y: 184, z: 380 }],
     ["f3-over-sky-and-snow.jpg", { x: 804, y: 252, z: 632 }],
     ["f3-over-snowy-rock.jpg", { x: 617, y: 184, z: 380 }],
+    // snowy rock in the two rows just above the first line (far to its right) once read as its top
+    ["f3-snow-above-first-line.jpg", { x: 258, y: 173, z: -285 }],
   ])("reads the F3 coordinates with bright scenery behind them in %s", (file, block) => {
     expect(analyzeScreenshot(readJava(file), 0).position).toEqual(block);
   });
