@@ -26,3 +26,6 @@ dist-ssr
 # local config and secrets
 .env.local
 .env.*.local
+
+# local screenshots for testing (not committed)
+screenshots/
