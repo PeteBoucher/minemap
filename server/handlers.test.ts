@@ -12,7 +12,7 @@ beforeAll(async () => {
 });
 
 const session = (over: Partial<CheckoutSession> = {}): CheckoutSession => ({
-  id: "cs_test_abcdefghijkl", status: "complete", payment_status: "paid", payment_link: "plink_ours",
+  id: "cs_test_abcdefghijkl", status: "complete", payment_status: "paid", payment_link: "plink_ours", currency: "usd",
   customer_details: { email: "buyer@example.com" }, ...over,
 });
 
@@ -40,12 +40,22 @@ describe("GET /api/unlock", () => {
     expect(calls[0].auth).toBe("Bearer sk_test_x");
   });
 
-  // A 100% promotion code under Managed Payments completes as "paid" with a $0 total (seen in the sandbox,
-  // 27 Nov 2026); Stripe's docs describe "no_payment_required" for no-cost orders, so both unlock.
+  // Both ways Stripe reports a $0 checkout unlock (ADR 0005).
   it.each(["paid", "no_payment_required"])("unlocks a purchase made free by a promotion code (payment_status %s)", async (payment_status) => {
     const free = session({ payment_status, amount_total: 0, discounts: [{ coupon: null, promotion_code: "promo_class" }] });
     const r = await unlock("cs_test_abcdefghijkl", fakeStripe({ "checkout/sessions/": free }).fetchFn);
     expect(r.status).toBe(200);
+  });
+
+  it("unlocks a free session only when it's known to come from our Payment Link", async () => {
+    const free = (over: Partial<CheckoutSession> = {}) => session({ amount_total: 0, discounts: [{ coupon: null, promotion_code: "promo_x" }], ...over });
+    const noLink = { ...env, STRIPE_PAYMENT_LINK_ID: undefined };
+    // a 100% code used on another link, or a $0 session made some other way
+    expect((await unlock("cs_test_abcdefghijkl", fakeStripe({ "checkout/sessions/": free({ payment_link: "plink_other" }) }).fetchFn)).status).toBe(402);
+    expect((await unlock("cs_test_abcdefghijkl", fakeStripe({ "checkout/sessions/": free() }).fetchFn, noLink)).status).toBe(402);
+    expect((await unlock("cs_test_abcdefghijkl", fakeStripe({ "checkout/sessions/": free({ payment_status: "no_payment_required", amount_total: null }) }).fetchFn, noLink)).status).toBe(402);
+    // a paid session still unlocks without the link configured, as before
+    expect((await unlock("cs_test_abcdefghijkl", fakeStripe({ "checkout/sessions/": session({ amount_total: 500 }) }).fetchFn, noLink)).status).toBe(200);
   });
 
   it("refuses unpaid sessions and sessions from another payment link", async () => {
@@ -154,7 +164,7 @@ describe("audit trail", () => {
   it("records what an unlock cost and the promotion code that paid for it, so free unlocks aren't counted as sales", async () => {
     const paid = withPostHog({ "checkout/sessions/": session({ amount_total: 500, discounts: [] }) });
     await unlock("cs_test_abcdefghijkl", paid.fetchFn, { ...env, ...audited });
-    expect(paid.events[0].properties).toMatchObject({ result: "issued", amount_total: 500 });
+    expect(paid.events[0].properties).toMatchObject({ result: "issued", amount_total: 500, currency: "usd" });
     expect(paid.events[0].properties).not.toHaveProperty("promotion_code");
 
     const free = withPostHog({ "checkout/sessions/": session({ amount_total: 0, discounts: [{ coupon: null, promotion_code: "promo_class" }] }) });
