@@ -14,5 +14,5 @@ A visitor who declined or never answered gets the plain link, so Stripe receives
 
 - The PostHog visitor id is stored in Stripe with the buyer's email, which links an otherwise pseudonymous analytics visitor to a named buyer. That happens only with consent, and the banner says so: Stripe is given the visitor's analytics id. Deleting a buyer's data means deleting it in both places.
 - Sales from visitors who didn't accept analytics have no visit. A "sales by campaign" chart is a lower bound, like the visitor counts (ADR 0002).
-- `license_unlock` events no longer all have the checkout id as `distinct_id`. Count sales with `total` (or unique `properties.session_id`), not unique users.
+- `license_unlock` events no longer all have the checkout id as `distinct_id`. Count sales with `total` (or unique `properties.session_id`), not unique users. Since ADR 0005, also leave out `amount_total = 0` (free promotion codes).
 - Refused unlocks and restores aren't linked: only a sale is attributed, and a restoring visit isn't where the sale came from.

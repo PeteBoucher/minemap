@@ -7,7 +7,7 @@ export interface Env extends AuditEnv {
   STRIPE_SECRET_KEY: string;
   /** Private JWK (JSON) for signing licences; generate with scripts/gen-license-keys.ts. */
   LICENSE_PRIVATE_JWK: string;
-  /** Only sessions from this Payment Link (plink_…) unlock, if set. */
+  /** Only sessions from this Payment Link (plink_…) unlock. Without it, free (promotion code) sessions never do. */
   STRIPE_PAYMENT_LINK_ID?: string;
 }
 
@@ -19,6 +19,10 @@ export interface CheckoutSession {
   /** Set by the app on the Payment Link URL for visitors who accepted analytics; see server/audit.ts. */
   client_reference_id?: string | null;
   customer_details: { email: string | null } | null;
+  /** Total charged, in the smallest unit of `currency`: 0 when a promotion code made it free. */
+  amount_total?: number | null;
+  currency?: string | null;
+  discounts?: { coupon: string | null; promotion_code: string | null }[] | null;
 }
 
 export const json = (body: unknown, status = 200) =>
@@ -29,9 +33,23 @@ export async function stripeGet<T>(env: Env, path: string, fetchFn: typeof fetch
   return r.ok ? ((await r.json()) as T) : null;
 }
 
-/** A completed, paid session from our Payment Link. */
-export const isPaid = (s: CheckoutSession, env: Env) =>
-  s.status === "complete" && s.payment_status === "paid" && (!env.STRIPE_PAYMENT_LINK_ID || s.payment_link === env.STRIPE_PAYMENT_LINK_ID);
+/** Made free by a promotion code: Stripe has reported both of these for a $0 checkout (ADR 0005). */
+const isFree = (s: CheckoutSession) => s.amount_total === 0 || s.payment_status === "no_payment_required";
+
+/**
+ * A completed purchase from our Payment Link: paid, or made free by one of our promotion codes. A free one
+ * must be known to come from our link (STRIPE_PAYMENT_LINK_ID), or any $0 checkout on the account would unlock.
+ */
+export const isPurchase = (s: CheckoutSession, env: Env) => {
+  const ourLink = s.payment_link === env.STRIPE_PAYMENT_LINK_ID;
+  if (s.status !== "complete") return false;
+  if (isFree(s)) return !!env.STRIPE_PAYMENT_LINK_ID && ourLink;
+  return s.payment_status === "paid" && (!env.STRIPE_PAYMENT_LINK_ID || ourLink);
+};
+
+/** The promotion code a session used, if any (its id, promo_…). */
+export const promotionCode = (s: CheckoutSession): string | undefined =>
+  s.discounts?.find((d) => d.promotion_code)?.promotion_code ?? undefined;
 
 export async function licenseFor(s: CheckoutSession, env: Env): Promise<string> {
   const lic: License = { v: 1, email: s.customer_details?.email ?? "", sid: s.id, iat: Date.now() };
