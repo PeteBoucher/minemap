@@ -29,5 +29,8 @@ export default defineConfig({
   },
   test: {
     include: ["src/**/*.test.ts", "server/**/*.test.ts"],
+    // the importer's tests analyse full-size screenshots in plain JS: up to ~5 s each locally, and
+    // slower on CI's runners than vitest's default 5 s allows
+    testTimeout: 30_000,
   },
 });
