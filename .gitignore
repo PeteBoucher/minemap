@@ -29,3 +29,6 @@ dist-ssr
 
 # local screenshots for testing (not committed)
 screenshots/
+
+# notes on finding beta testers (not committed)
+docs/marketing.md
