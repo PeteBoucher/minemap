@@ -40,8 +40,10 @@ describe("GET /api/unlock", () => {
     expect(calls[0].auth).toBe("Bearer sk_test_x");
   });
 
-  it("unlocks a purchase made free by a promotion code", async () => {
-    const free = session({ payment_status: "no_payment_required", amount_total: 0, discounts: [{ coupon: null, promotion_code: "promo_class" }] });
+  // A 100% promotion code under Managed Payments completes as "paid" with a $0 total (seen in the sandbox,
+  // 27 Nov 2026); Stripe's docs describe "no_payment_required" for no-cost orders, so both unlock.
+  it.each(["paid", "no_payment_required"])("unlocks a purchase made free by a promotion code (payment_status %s)", async (payment_status) => {
+    const free = session({ payment_status, amount_total: 0, discounts: [{ coupon: null, promotion_code: "promo_class" }] });
     const r = await unlock("cs_test_abcdefghijkl", fakeStripe({ "checkout/sessions/": free }).fetchFn);
     expect(r.status).toBe(200);
   });
@@ -155,7 +157,7 @@ describe("audit trail", () => {
     expect(paid.events[0].properties).toMatchObject({ result: "issued", amount_total: 500 });
     expect(paid.events[0].properties).not.toHaveProperty("promotion_code");
 
-    const free = withPostHog({ "checkout/sessions/": session({ payment_status: "no_payment_required", amount_total: 0, discounts: [{ coupon: null, promotion_code: "promo_class" }] }) });
+    const free = withPostHog({ "checkout/sessions/": session({ amount_total: 0, discounts: [{ coupon: null, promotion_code: "promo_class" }] }) });
     await unlock("cs_test_abcdefghijkl", free.fetchFn, { ...env, ...audited });
     expect(free.events[0].properties).toMatchObject({ result: "issued", amount_total: 0, promotion_code: "promo_class" });
   });

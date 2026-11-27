@@ -34,7 +34,8 @@ export async function stripeGet<T>(env: Env, path: string, fetchFn: typeof fetch
 
 /**
  * A completed session from our Payment Link, paid or made free by a promotion code (docs/adr/0005).
- * The link's price isn't zero, so "no_payment_required" only happens with a 100% code.
+ * A free one has come back as "paid" with amount_total 0; Stripe documents "no_payment_required" for
+ * no-cost orders, and the link's price isn't zero, so that too can only come from one of our codes.
  */
 export const isPaid = (s: CheckoutSession, env: Env) =>
   s.status === "complete" && (s.payment_status === "paid" || s.payment_status === "no_payment_required") &&
