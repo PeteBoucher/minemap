@@ -26,3 +26,9 @@ dist-ssr
 # local config and secrets
 .env.local
 .env.*.local
+
+# local screenshots for testing (not committed)
+screenshots/
+
+# notes on finding beta testers (not committed)
+docs/marketing.md
