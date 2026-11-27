@@ -145,6 +145,9 @@ a.btn[aria-disabled=true]{opacity:.45;cursor:not-allowed}
 .consent p{margin:0 0 10px;line-height:1.45}
 .consent-btns{display:flex;gap:8px;justify-content:flex-end}
 .foot{max-width:1100px;margin:0 auto;padding:8px 16px 96px;text-align:center}
+/* Preview builds only: which commit is running */
+.build-tag{margin:0 auto 24px;text-align:center;font:400 .75rem var(--mono);color:var(--muted)}
+.build-tag a{color:inherit}
 .linkbtn{font:inherit;font-size:.82rem;color:var(--muted);background:none;border:0;padding:4px;text-decoration:underline;cursor:pointer}
 
 /* feedback: a tab on the left edge on desktop, a ••• menu item on phones */
