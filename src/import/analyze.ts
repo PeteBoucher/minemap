@@ -1,15 +1,18 @@
 // One call that works out everything the importer can tell from a screenshot.
 import type { Edition } from "../core/edition";
 import type { Crop } from "../core/terrain";
-import { detectCrop } from "./crop";
+import { CROP_CANDIDATES, detectCrop } from "./crop";
 import { readF3Position } from "./f3";
 import { type RGBAImage, fitToFrame } from "./image";
 import { type Position, readPosition } from "./ocr";
 import { type Placement, placeFromPosition } from "./place";
+import { straighten } from "./straighten";
 
 export interface Analysis {
   /** The screenshot fitted into the 1280×720 frame: what gets stored, and what `crop` refers to. */
   frame: RGBAImage;
+  /** Whether `frame` has the map redrawn straight (it was tilted), so it differs from the screenshot. */
+  straightened: boolean;
   /** Where the held map is in the frame, or null if it doesn't look like one. */
   crop: Crop | null;
   /** The player's coordinates, or null if none are on screen (or they couldn't be read). */
@@ -22,10 +25,22 @@ export interface Analysis {
 
 /** `img` is the screenshot as taken, any size: text is read at full size, the map found in the frame. */
 export function analyzeScreenshot(img: RGBAImage, fallbackScale: number): Analysis {
-  const frame = fitToFrame(img);
+  const fitted = fitToFrame(img);
   const bedrock = readPosition(img), java = bedrock ? null : readF3Position(img);
   const position = bedrock ?? java, edition = bedrock ? "bedrock" : java ? "java" : null;
-  const crop = detectCrop(frame, edition)?.crop ?? null;
+  const found = detectCrop(fitted, edition);
+  // Looking down while walking tilts the held map (Java and Bedrock alike); one found exactly at a
+  // known layout is held level, and fitting corners to it would only add noise.
+  const level = !found || CROP_CANDIDATES.some((c) => c.name === found.name);
+  const { frame, crop } = level ? { frame: fitted, crop: found?.crop ?? null } : straighten(fitted, found.crop);
   const placement = crop && position ? placeFromPosition(frame, crop, position, fallbackScale, edition) : null;
-  return { frame, crop, position, edition, placement };
+  return { frame, crop, position, edition, placement, straightened: frame !== fitted };
+}
+
+/**
+ * Whether the screenshot file can be stored as taken rather than `frame` re-encoded: only when it's
+ * a JPEG already the frame's size (a Switch screenshot) and the map wasn't straightened.
+ */
+export function keepsOriginal(file: { type: string }, img: { width: number; height: number }, a: Analysis): boolean {
+  return file.type === "image/jpeg" && img.width === a.frame.width && img.height === a.frame.height && !a.straightened;
 }

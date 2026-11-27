@@ -3,10 +3,10 @@ import jpeg from "jpeg-js";
 import { describe, expect, it } from "vitest";
 import { type Crop, SWITCH_CROP, drawnPart } from "../core/terrain";
 import { DEMO_MAPS } from "../store/demoWorld";
-import { analyzeScreenshot } from "./analyze";
+import { analyzeScreenshot, keepsOriginal } from "./analyze";
 import { detectCrop } from "./crop";
 import javaCrops from "./fixtures/java/crops.json";
-import { fitToFrame, frameRect } from "./image";
+import { fitToFrame, frameRect, rgb } from "./image";
 import fixtures from "./ocr.fixtures.json";
 import { type Position, positionFromText, readPosition } from "./ocr";
 import { checkScales, placeFromPosition } from "./place";
@@ -100,6 +100,7 @@ describe("analyzeScreenshot", () => {
       position: { x: 796, y: 78, z: 1676 },
       edition: "bedrock",
       placement: { x: -64, z: -64, size: 2048, basis: "marker" },
+      straightened: false,
     });
   });
 });
@@ -180,12 +181,21 @@ const readJava = (file: string) => read(`./fixtures/java/${file}`);
 /** Half a map pixel: 543 / 128 ≈ 4.2 frame pixels per map pixel. */
 const HALF_MAP_PX = 2;
 
+/**
+ * Measured squares of maps that are tilted (held lower): 14.04.33's left edge slants from x≈804 at
+ * the top to ≈787 near the bottom, full-size pixels; 14.04.36 is the same hold without F3. These are
+ * stored straightened, into a square as tall as the map is on screen, so only where the square
+ * sits is still measured.
+ */
+const TILTED = new Set(["2026-11-20_14.04.33.jpg", "2026-11-20_14.04.36.jpg"]);
+
 describe("Java Edition screenshots", () => {
   it.each(Object.entries(JAVA))("finds the held map in %s", (file, { crop: want }) => {
     const a = analyzeScreenshot(readJava(file), 0);
     expect([a.frame.width, a.frame.height]).toEqual([1280, 720]);
     expect(a.crop).not.toBeNull();
-    for (const k of ["x", "y", "size"] as const) expect(Math.abs(a.crop![k] - want[k])).toBeLessThanOrEqual(HALF_MAP_PX);
+    for (const k of TILTED.has(file) ? (["x", "y"] as const) : (["x", "y", "size"] as const))
+      expect(Math.abs(a.crop![k] - want[k]), k).toBeLessThanOrEqual(HALF_MAP_PX);
   });
 
   // These screenshots are also what f3Glyphs.ts was learned from, so this shows the glyphs fit them;
@@ -220,13 +230,83 @@ describe("Java Edition screenshots", () => {
 
   it("finds a map held at night while walking, though it is tilted and lit purple", () => {
     // 2026-11-24_10.39.40: the frame is a trapezoid here (its left edge runs from x=506 to 501 down the
-    // map), which no square fits exactly. The square found is about 8 full-size pixels inside the
-    // map's lower edges, about 1.2 map pixels; this only pins it to within a map pixel and a half.
+    // map), so it is stored straightened, into a square as tall as the map is on screen; this only
+    // pins that square to within a map pixel and a half of the lower edges measured.
     // Its top edge is under unexplored map and can't be measured.
     const img = readJava("2026-11-24_10.39.40.jpg"), crop = analyzeScreenshot(img, 0).crop;
     expect(crop).not.toBeNull();
     const got = cropEdges(crop!, img.width, img.height);
     for (const [k, want] of Object.entries({ left: 504, right: 1418.5, bottom: 1023 })) expect(Math.abs(got[k as keyof Edges] - want), k).toBeLessThanOrEqual(10);
+  });
+
+  // Looking down while walking tilts the map into a trapezoid. A square crop takes in wedges of
+  // frame at the top corners, which show between maps; the map is stored straightened, so the map
+  // pixels along the crop's edges are map. Corners measured by hand (full-size pixels, the map's own):
+  // - 2026-11-24_12.26.43: (518, 131), (1402, 131), (1424, 1033), (497, 1033): 884 wide at the top,
+  //   927 at the bottom; explored all round.
+  // - 2026-11-26_11.55.42, tilted far: top left (884, 427), top right (2142, 425), bottom left
+  //   (680, 1862); the right edge is at x≈2250 on row 1200. 1258 wide at the top, about 1660 at the
+  //   bottom. Only the left edge is checked: its top right is unexplored (the frame's tint), the
+  //   hotbar covers the bottom edge, and a beach runs down the right edge (shaded sand is within
+  //   this test's reach of the frame's light tone).
+  // - switch/2026112612523700 (Bedrock on a Switch, 1280×720): (402, 167), (877, 167), bottom left
+  //   (322, 710); a beach hides the bottom right. 475 wide at the top, about 635 at the bottom. The
+  //   hotbar covers the bottom edge and the beach the right, so the left and top are checked.
+  //   Three more from the same spot: 22600 is held lowest, its bottom corners a pixel or two past the
+  //   screenshot's bottom edge.
+  type Edge = "top" | "bottom" | "left" | "right";
+  it.each([
+    ["java/2026-11-24_12.26.43.jpg", { top: [0, 128], bottom: [0, 128], left: [0, 128], right: [0, 128] }],
+    ["java/2026-11-26_11.55.42.jpg", { left: [0, 128] }],
+    ["switch/2026112612523700.jpg", { top: [0, 128], left: [0, 128] }],
+    ["switch/2026112612522600.jpg", { top: [0, 120], left: [0, 128] }], // beach in the top right corner
+    ["switch/2026112612522800.jpg", { top: [0, 128], left: [0, 128] }],
+    ["switch/2026112612525700.jpg", { top: [0, 128], left: [0, 128] }],
+  ] as [string, Partial<Record<Edge, [number, number]>>][])("straightens a map tilted by looking down while walking in %s", (file, edges) => {
+    const a = analyzeScreenshot(read(`./fixtures/${file}`), 0), c = a.crop!;
+    // the frame's two tones, light and shadow, read off these screenshots
+    const isFrame = ([r, g, b]: number[]) => [[215, 192, 150], [150, 135, 108]].some(([R, G, B]) => Math.hypot(r - R, g - G, b - B) < 25);
+    const p = c.size / 128, at = (i: number, j: number) => rgb(a.frame, Math.floor(c.x + (i + 0.5) * p), Math.floor(c.y + (j + 0.5) * p));
+    const cell: Record<Edge, (k: number) => [number, number]> = { top: (k) => [k, 0], bottom: (k) => [k, 127], left: (k) => [0, k], right: (k) => [127, k] };
+    const onFrame: string[] = [];
+    for (const [edge, [from, to]] of Object.entries(edges) as [Edge, [number, number]][])
+      for (let k = from; k < to; k++) if (isFrame(at(...cell[edge](k)))) onFrame.push(`${edge} ${k}`);
+    expect(onFrame).toEqual([]);
+  });
+
+  // 2026-11-24_10.56.22: at night, with unexplored map along every edge, the frame's corners fit
+  // poorly and come out a little wider at the top. The frame's outer edges are straight (x≈458 and
+  // ≈1462 full-size, top to bottom), so it isn't tilted and must be stored as taken.
+  it("leaves alone a map whose corners can't be fitted surely (night, unexplored edges)", () => {
+    const img = readJava("2026-11-24_10.56.22.jpg"), got = analyzeScreenshot(img, 0).frame.data, want = fitToFrame(img).data;
+    expect(got.filter((v, i) => v !== want[i]).length).toBe(0);
+  });
+
+  // A map whose bottom is below the screenshot can't be straightened: the rows that would fill the
+  // square aren't there. 12.26.43 cut off at row 1000 loses its bottom edge (row 1033) and the frame
+  // below it, so it must be stored as taken, not filled with copies of the last row.
+  it("doesn't straighten a tilted map that runs off the bottom of the screenshot", () => {
+    const src = readJava("2026-11-24_12.26.43.jpg"), H = 1000;
+    const img = { width: src.width, height: H, data: src.data.slice(0, src.width * H * 4) };
+    const a = analyzeScreenshot(img, 0), want = fitToFrame(img).data;
+    expect(a.edition).toBe("java");
+    expect(a.frame.data.filter((v, i) => v !== want[i]).length).toBe(0);
+  });
+
+  // Maps held level sit exactly at a known Switch or iPhone layout. Fitting corners to their frames
+  // wanders more than on Java's (up to 5.5 frame pixels between opposite edges in these), so a map
+  // found at a layout is never straightened.
+  it.each([...Object.keys(fixtures).map((f) => `../../public/demo/${f}`), "./fixtures/ios/IMG_3768.jpg", "./fixtures/ios/IMG_3775.jpg"])(
+    "stores the level Bedrock map in %s as taken", (path) => {
+      const img = read(path), got = analyzeScreenshot(img, 0).frame.data, want = fitToFrame(img).data;
+      expect(got.filter((v, i) => v !== want[i]).length).toBe(0);
+    });
+
+  // Straightening resamples the map, so it must leave maps that aren't tilted exactly as taken.
+  it.each(Object.keys(JAVA).filter((f) => !TILTED.has(f)))("stores the untilted map in %s as taken", (file) => {
+    const img = readJava(file);
+    const got = analyzeScreenshot(img, 0).frame.data, want = fitToFrame(img).data;
+    expect(got.filter((v, i) => v !== want[i]).length).toBe(0);
   });
 
   // Java lights the held map like any other item: under a roof the white player marker comes out
@@ -256,5 +336,26 @@ describe("Java Edition screenshots", () => {
 
   it("finds no map in a 1920×1200 screenshot with F3 open and a sword in hand", () => {
     expect(analyzeScreenshot(readJava("2026-11-20_13.43.40.jpg"), 0).crop).toBeNull();
+  });
+});
+
+// The importer keeps the screenshot file as taken when it's already the frame (a Switch's 1280×720
+// JPEG), to avoid re-encoding it. A straightened map must be stored as straightened, or the square
+// is drawn over the tilted original, wedges and all.
+describe("keepsOriginal", () => {
+  const jpeg = { type: "image/jpeg" };
+  it("keeps a level Switch screenshot as taken", () => {
+    const img = decode("2026110415391900-11B64E28AD7A49CA9EC8AC007BE858C6.jpg");
+    expect(keepsOriginal(jpeg, img, analyzeScreenshot(img, 0))).toBe(true);
+  });
+
+  it.each(["2026112612523700.jpg", "2026112612525700.jpg"])("stores the straightened copy of tilted Switch screenshot %s", (file) => {
+    const img = read(`./fixtures/switch/${file}`);
+    expect(keepsOriginal(jpeg, img, analyzeScreenshot(img, 0))).toBe(false);
+  });
+
+  it("stores the fitted copy of a screenshot of another size", () => {
+    const img = readJava("2026-11-20_14.00.44.jpg");
+    expect(keepsOriginal(jpeg, img, analyzeScreenshot(img, 0))).toBe(false);
   });
 });

@@ -3,8 +3,7 @@
 import type { Edition } from "../core/edition";
 import { mapCorner, mapSize } from "../core/geo";
 import type { Crop } from "../core/terrain";
-import { type Analysis, analyzeScreenshot } from "../import/analyze";
-import type { RGBAImage } from "../import/image";
+import { type Analysis, analyzeScreenshot, keepsOriginal } from "../import/analyze";
 import { h } from "./dom";
 import { type HowTo, howToContent } from "./howto";
 
@@ -34,14 +33,15 @@ async function readPixels(file: File): Promise<ImageData> {
 }
 
 /** Draw the analysed frame onto a canvas and encode it for storage. */
-async function toShot(file: File, original: ImageData, frame: RGBAImage): Promise<Shot> {
+async function toShot(file: File, original: ImageData, a: Analysis): Promise<Shot> {
+  const { frame } = a;
   const canvas = document.createElement("canvas");
   canvas.width = frame.width;
   canvas.height = frame.height;
   const data = new Uint8ClampedArray(frame.data);
   canvas.getContext("2d")!.putImageData(new ImageData(data, frame.width, frame.height), 0, 0);
-  // keep the original file when it's already the frame's size, otherwise store the fitted copy
-  const blob = original.width === frame.width && original.height === frame.height && file.type === "image/jpeg"
+  // keep the original file when it's already the frame (and the map wasn't straightened), otherwise store the frame
+  const blob = keepsOriginal(file, original, a)
     ? file
     : await new Promise<Blob>((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("Couldn't encode image"))), "image/jpeg", 0.9));
   return { blob, canvas };
@@ -59,7 +59,7 @@ export async function importScreenshots(files: File[], host: ImportHost): Promis
       const original = await readPixels(files[i]);
       a = analyzeScreenshot(original, host.lastScale());
       if (a.edition) host.setEdition(a.edition);
-      shot = await toShot(files[i], original, a.frame);
+      shot = await toShot(files[i], original, a);
     } catch (e) { error = (e as Error).message; }
     const result = await step(dlg, { index: i, total: files.length, name: files[i].name, shot, analysis: a, error, host });
     if (result === "cancel") break;
