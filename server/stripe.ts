@@ -19,6 +19,9 @@ export interface CheckoutSession {
   /** Set by the app on the Payment Link URL for visitors who accepted analytics; see server/audit.ts. */
   client_reference_id?: string | null;
   customer_details: { email: string | null } | null;
+  /** Total charged, in the smallest currency unit: 0 when a promotion code made it free. */
+  amount_total?: number | null;
+  discounts?: { coupon: string | null; promotion_code: string | null }[] | null;
 }
 
 export const json = (body: unknown, status = 200) =>
@@ -29,9 +32,17 @@ export async function stripeGet<T>(env: Env, path: string, fetchFn: typeof fetch
   return r.ok ? ((await r.json()) as T) : null;
 }
 
-/** A completed, paid session from our Payment Link. */
+/**
+ * A completed session from our Payment Link, paid or made free by a promotion code (docs/adr/0005).
+ * The link's price isn't zero, so "no_payment_required" only happens with a 100% code.
+ */
 export const isPaid = (s: CheckoutSession, env: Env) =>
-  s.status === "complete" && s.payment_status === "paid" && (!env.STRIPE_PAYMENT_LINK_ID || s.payment_link === env.STRIPE_PAYMENT_LINK_ID);
+  s.status === "complete" && (s.payment_status === "paid" || s.payment_status === "no_payment_required") &&
+  (!env.STRIPE_PAYMENT_LINK_ID || s.payment_link === env.STRIPE_PAYMENT_LINK_ID);
+
+/** The promotion code a session used, if any (its id, promo_…). */
+export const promotionCode = (s: CheckoutSession): string | undefined =>
+  s.discounts?.find((d) => d.promotion_code)?.promotion_code ?? undefined;
 
 export async function licenseFor(s: CheckoutSession, env: Env): Promise<string> {
   const lic: License = { v: 1, email: s.customer_details?.email ?? "", sid: s.id, iat: Date.now() };

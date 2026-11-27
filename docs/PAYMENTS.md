@@ -110,6 +110,19 @@ Until steps 1 and 5 are done, the unlock button is disabled and says unlocking i
 
 The live checkout lets buyers choose their local currency. A Spanish buyer sees, for example, **€4.74 or US$5.00**. The euro price is $5 converted, plus a conversion fee of about 4% that the buyer pays (Adaptive Pricing, turned on by Managed Payments). The sandbox doesn't show this.
 
+## Free unlocks for testers
+
+Testers get the full version with a promotion code for the 100%-off coupon "Feedback tester", entered at the normal checkout ([ADR 0005](adr/0005-free-unlocks-with-promotion-codes.md)). The checkout totals $0, Stripe skips the card step, and the app unlocks as for a sale.
+
+- **Set up once per mode:** in *Product catalog → Coupons*, create a coupon: *Percentage discount* 100%, *Duration* once, named "Feedback tester". Then, on the Payment Link, turn on *Allow promotion codes*.
+- **A code per person:** on the coupon, *Add promotion code*, with a code such as `MINEMAP-ALEX` and *Limit the number of times this code can be redeemed* set to 1.
+- **A code for a group** (a class, a club): the same, limited to 30. That's 30 uses in total, not one per person.
+- **To stop a code:** archive it. Licences already issued keep working.
+- **Where they show:** Stripe lists free orders under *Payments → No-cost orders*. In PostHog, `license_unlock` has `amount_total: 0` and the `promotion_code` id.
+- **Sandbox:** Stripe allows a $0 order on a sandbox Payment Link only when the checkout email contains `+no_cost_orders`, for example `you+no_cost_orders@example.com`.
+
+The sandbox has `TEST-PERSON` (1 use) and `TEST-CLASS` (30 uses).
+
 ## Running it
 
 - **Where payments appear:** in the Stripe Dashboard under ***Transactions***. *Payments → Payment Analytics* can show nothing for recent sales, because its charts update with a delay.
@@ -124,7 +137,7 @@ The live checkout lets buyers choose their local currency. A Spanish buyer sees,
 
 Stripe is the record of payments, refunds and tax. With `POSTHOG_KEY` set, the endpoints also send one PostHog event per request, so you can see every licence issued or refused:
 
-- **`license_unlock`:** `result` (`issued`, `refused`, `not_found`, `bad_input`, `not_configured`), `session_id`, `livemode`, `deploy_env` (`production`, `preview`; events from before 18 November 2026 don't have it).
+- **`license_unlock`:** `result` (`issued`, `refused`, `not_found`, `bad_input`, `not_configured`), `session_id`, `livemode`, `deploy_env` (`production`, `preview`; events from before 18 November 2026 don't have it)), and when issued, `amount_total` (cents; `0` for a free promotion code) and `promotion_code` (`promo_…`) if one was used. Count sales with `amount_total` above 0 or not set (it isn't on events from before the codes).
 - **`license_restore`:** the same results plus `stripe_error`, with `email_hash` (SHA-256 of the lower-cased email, never the email itself) and, when issued, the `session_id` that was restored.
 
 The `session_id` links each event to the Checkout Session in Stripe, and `livemode` separates real sales from tests. When the buyer accepted analytics, the app passes their visit to Stripe as the Payment Link's `client_reference_id`. `license_unlock` is then recorded under that visitor's `distinct_id`, with the visit's `$session_id`, so PostHog can break sales down by campaign ([ADR 0004](adr/0004-link-sales-to-visits.md)). Otherwise `distinct_id` is the checkout id. Events are sent without person profiles. A PostHog outage never blocks an unlock: the event is just lost. Events take a minute or two to become queryable.

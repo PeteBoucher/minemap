@@ -23,6 +23,10 @@ export interface AuditEvent {
   result: AuditResult;
   session_id?: string;
   email_hash?: string;
+  /** What the unlock cost, in the smallest currency unit: 0 for a free promotion code. */
+  amount_total?: number;
+  /** The promotion code used (promo_…), if any. */
+  promotion_code?: string;
   /** The PostHog visit that started checkout (src/core/checkout.ts); the sale is recorded under it. */
   visit?: Visit;
 }

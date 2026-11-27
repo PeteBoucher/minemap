@@ -40,6 +40,12 @@ describe("GET /api/unlock", () => {
     expect(calls[0].auth).toBe("Bearer sk_test_x");
   });
 
+  it("unlocks a purchase made free by a promotion code", async () => {
+    const free = session({ payment_status: "no_payment_required", amount_total: 0, discounts: [{ coupon: null, promotion_code: "promo_class" }] });
+    const r = await unlock("cs_test_abcdefghijkl", fakeStripe({ "checkout/sessions/": free }).fetchFn);
+    expect(r.status).toBe(200);
+  });
+
   it("refuses unpaid sessions and sessions from another payment link", async () => {
     expect((await unlock("cs_test_abcdefghijkl", fakeStripe({ "checkout/sessions/": session({ payment_status: "unpaid" }) }).fetchFn)).status).toBe(402);
     expect((await unlock("cs_test_abcdefghijkl", fakeStripe({ "checkout/sessions/": session({ payment_link: "plink_other" }) }).fetchFn)).status).toBe(402);
@@ -75,6 +81,11 @@ describe("POST /api/restore", () => {
     expect(q.get("customer_details[email]")).toBe("buyer@example.com");
     // Stripe refuses customer_details combined with payment_link, so the link is checked here instead.
     expect(q.has("payment_link")).toBe(false);
+  });
+
+  it("re-issues a licence for a purchase made free by a promotion code", async () => {
+    const free = session({ payment_status: "no_payment_required", amount_total: 0, discounts: [{ coupon: null, promotion_code: "promo_class" }] });
+    expect((await restore({ email: "buyer@example.com" }, fakeStripe({ "checkout/sessions?": { data: [free] } }).fetchFn)).status).toBe(200);
   });
 
   it("reports a Stripe error instead of saying there's no purchase", async () => {
@@ -136,6 +147,17 @@ describe("audit trail", () => {
       expect(r.events[0].distinct_id).toBe("cs_test_abcdefghijkl");
       expect(r.events[0].properties).not.toHaveProperty("$session_id");
     }
+  });
+
+  it("records what an unlock cost and the promotion code that paid for it, so free unlocks aren't counted as sales", async () => {
+    const paid = withPostHog({ "checkout/sessions/": session({ amount_total: 500, discounts: [] }) });
+    await unlock("cs_test_abcdefghijkl", paid.fetchFn, { ...env, ...audited });
+    expect(paid.events[0].properties).toMatchObject({ result: "issued", amount_total: 500 });
+    expect(paid.events[0].properties).not.toHaveProperty("promotion_code");
+
+    const free = withPostHog({ "checkout/sessions/": session({ payment_status: "no_payment_required", amount_total: 0, discounts: [{ coupon: null, promotion_code: "promo_class" }] }) });
+    await unlock("cs_test_abcdefghijkl", free.fetchFn, { ...env, ...audited });
+    expect(free.events[0].properties).toMatchObject({ result: "issued", amount_total: 0, promotion_code: "promo_class" });
   });
 
   it("records restores with an email hash, never the email", async () => {

@@ -1,15 +1,15 @@
 // GET /api/unlock?session_id=cs_… → { license }
 // Stripe's Payment Link sends buyers back to the app with the Checkout Session id; this checks with
 // Stripe that the session was paid and returns a signed licence. Every outcome is audited.
-import { type Visit, visitFromReference } from "../src/core/checkout";
-import { type AuditResult, audit } from "./audit";
-import { type CheckoutSession, type Env, configured, isPaid, json, licenseFor, stripeGet } from "./stripe";
+import { visitFromReference } from "../src/core/checkout";
+import { type AuditEvent, type AuditResult, audit } from "./audit";
+import { type CheckoutSession, type Env, configured, isPaid, json, licenseFor, promotionCode, stripeGet } from "./stripe";
 
 export async function handleUnlock(request: Request, env: Env, fetchFn: typeof fetch = fetch): Promise<Response> {
   const sid = new URL(request.url).searchParams.get("session_id") ?? "";
   const valid = /^cs_(test|live)_[A-Za-z0-9]{10,200}$/.test(sid);
-  const done = async (res: Response, result: AuditResult, visit?: Visit) => {
-    await audit(env, { event: "license_unlock", result, session_id: valid ? sid : undefined, visit }, fetchFn);
+  const done = async (res: Response, result: AuditResult, sale?: Pick<AuditEvent, "visit" | "amount_total" | "promotion_code">) => {
+    await audit(env, { event: "license_unlock", result, session_id: valid ? sid : undefined, ...sale }, fetchFn);
     return res;
   };
 
@@ -19,5 +19,9 @@ export async function handleUnlock(request: Request, env: Env, fetchFn: typeof f
   if (!session) return done(json({ error: "Couldn't find that purchase." }, 404), "not_found");
   if (!isPaid(session, env)) return done(json({ error: "That purchase hasn't been paid." }, 402), "refused");
   // A sale is recorded under the visit that started checkout, if the buyer accepted analytics (ADR 0004).
-  return done(json({ license: await licenseFor(session, env) }), "issued", visitFromReference(session.client_reference_id));
+  return done(json({ license: await licenseFor(session, env) }), "issued", {
+    visit: visitFromReference(session.client_reference_id),
+    amount_total: session.amount_total ?? undefined, // so codes redeemed aren't counted as sales
+    promotion_code: promotionCode(session),
+  });
 }
